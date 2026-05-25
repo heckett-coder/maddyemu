@@ -1,0 +1,353 @@
+MIRA-01XX (MADDY Sound Source)
+
+- 18 4OP FM - 36 2OP FM (OPM, OPN, OPL, MADDY INST.) (Only one at a time)
+- 2-16 8BIT WAVETABLE/NOISE GENERATOR (512x256 Wave Length) (SID2-like Filters) (FDS/VB Modulators)
+- 8-64 1-16BIT PCM, DPCM, ADPCM (No Interpolation, Linear, Gaussian, Sinc + Low-Pass)
+
+------------------------------------------------------------------------------------------------------
+
+MADDY Project Files (.mdp, Music Device Project)
+
+HEADER (not really): Includes song info (title, album, 
+		artist, comments, subsongs, etc.).
+		May include brand name. Appended
+		at the end of the file in Little
+		Endian mode.
+
+ADDR 0x0000 (STATUS/DATA REGISTER)
+|0|TIMER 2 RESET
+|1|TIMER 1 RESET
+|2|TIMER 2 START
+|3|TIMER 1 START
+|4|TIMER 2 FLAG
+|5|TIMER 1 FLAG
+|6|IRQ FLAG
+|7|---
+
+//Side Note: These 2 addresses should control the BPM
+
+ADDR 0x0001 (TIMER 1)
+|0-7|TIMER 1 COUNTER (80 Nanosec. resolution)
+
+ADDR 0x0002 (TIMER 2)
+|0-7|TIMER 2 COUNTER (320 Nanosec. resolution)
+
+ADDR 0x0003 (GLOBAL SOUND CONTROL 1)
+
+//Side Note: Wavetables should always be 512x256 (Width x Height) in size,
+	if you want smaller wave sizes, do it in software, it can't be hard
+	can it?.
+//Side Note: Sample channel amount should go up or down by 8CH per bit, if
+	you need to play CD Audio, go do so on the first enabled channels via
+	software and constant write/reading, like with SB16's DMA sampling.
+//Side Note: There can only be 1 FM inst. type per mode. It would have been
+	AWESOME to use different YAMAHA sound sources, but i personally want
+	it to be as compact as possible. Every byte counts, y'know?
+
+|0-1|FM Inst Mode (00-MADDY [DEFAULT], 01-OPM, 10-OPN, 11-OPL)
+|2-4|Wavetable Channel Number (000-2CH [DEFAULT], 001-4CH... 111-16CH) 
+|5-7|Sample Channel Number (000-8CH [DEFAULT], 001-16CH... 111-64CH)
+
+ADDR 0x0004 (GLOBAL SOUND CONTROL 2 - 4OP FM MIX 1)
+|0-1|Sample Interpolation (00-None [DEFAULT], 01-Linear, 10-Gaussian, 11-Sinc+LP)
+|2|CH-01 OP00-03
+|3|CH-02 OP04-07
+|4|CH-03 OP08-0B
+|5|CH-04 OP0C-0F
+|6|CH-05 OP10-13
+|7|CH-06 OP14-17
+
+ADDR 0x0005 (4OP FM MIX 2)
+|0|CH-07 OP18-1B
+|1|CH-08 OP1C-1F
+|2|CH-09 OP20-23
+|3|CH-10 OP24-27
+|4|CH-11 OP28-2B
+|5|CH-12 OP2C-2F
+|6|CH-13 OP30-33
+|7|CH-14 OP34-37
+
+ADDR 0x0006 (4OP FM MIX 3 - GLOBAL SOUND CONTROL 3)
+|0|CH-15 OP38-3B
+|1|CH-16 OP3C-3F
+|2|CH-17 OP40-43
+|3|CH-18 OP44-47
+|4|---
+|5-7|ExtCH3+9+15 MODE (OPN Mode Only) (000-Normal, 100-ExtCH3, 010-ExtCH9... 111-ExtCH3+9+15)
+
+//Side Note: When using 2-OP mode, bit 2 has no effect.
+
+ADDR 0x0008-0x001A (MADDY FM INST. CONTROL)
+|0-2|ALGORITHM (CONTAINS OPN/OPM ALGORITHMS, SAME ORDERS, SAME THING)
+|3-5|OP1 Feedback (000=0 FEEDBACK, 001=1 FEEDBACK... 111=7 FEEDBACK)
+|6|MADDY OP Type (0=4OP [DEFAULT], 1=2OP)
+|7|LFO ENABLE
+
+//Side Note: Every step is 0.75dB quieter than the last
+	(it should also be logarithmic, like a proper FM chip).
+
+//Side Note: When using 2-OP mode, OP. 3-4 do nothing but are still stored.
+
+ADDR 0x001B-0x00AB (OP. 1-4 TOTAL LEVEL + AM)
+|0-5|VOLUME/TOTAL LEVEL (OPL LEVEL)
+|6|VOLUME/TOTAL LEVEL (OPN/M/MADDY ONLY EXTRA BIT)
+|7|AM ENABLE
+
+//Side Note: Works in the same way as the NDS stereo panning,
+	0 is center, and either extreme of this signed value
+	should move to one speaker or the other smoothly.
+
+ADDR 0x00AC-0x00D0 (FM SIGNED STEREO PANNING)
+|0-6|PANNING VALUE
+|7|SIGN FLIP (0=Left, 1=Right)
+
+ADDR 0x00D1-0x0161 (OP. 1-4 WAVE+OCTAVE)
+|0-3|Octave Multiplier (0000=0.5 Octaves, 0001=1 Octave... 1111=16 Octaves)
+|4|Waveform Bank (0xxx=OPL Series Waveforms, 1xxx=Extra Waveforms (MADDY) )
+|5-7|Waveform Selection (x000-x011=OPL2/Triangle Waves, x100-x111=OPL3/Saw Waves)
+
+ADDR 0x0162-0x0186 (FM-AM SENSITIVITY)
+|0-2|FM SENSITIVITY
+|3-4|AM SENSITIVITY
+|5-6|LFO WAVE (OPM)
+|7|---
+
+ADDR 0x0187-0x01AB (LFO SPEED)
+|0-2|LFO SPEED 0-7 (OPN)
+|3-7|LFO SPEED 8-255 (OPM)
+
+//Side Note: SSG-EG is only for OPN Mode and should work
+	just the same as a real OPN series chip.
+
+ADDR 0x01AC-0x023B (OP. 1-4 ATTACK RATE + RATE SCALING + SSG-EG ENABLE)
+|0-3|ATTACK RATE (OPL)
+|4|ATTACK RATE EXTRA (OPN/OPM/MADDY)
+|5|SSG-EG ENABLE (OPN ONLY)
+|6-7|RATE SCALING
+
+ADDR 0x023C-0x02CC (OP. 1-4 DECAY RATE + DETUNE 1)
+|0-3|DECAY RATE (OPL)
+|4|DECAY RATE EXTRA (OPN/OPM/MADDY)
+|5-7|DETUNE 1
+
+//Side Note: Only works when SSG-EG is enabled (see prev. note)
+
+ADDR 0x02CD-0x035D (OP. 1-4 SUSTAIN RATE + SSG-EG WAVEFORM)
+|0-4|SUSTAIN RATE (OPN/OPM/MADDY)
+|5-7|SSG-EG WAVEFORM (OPN ONLY)
+
+ADDR 0x035E-0x03EE (OP. 1-4 RELEASE RATE + SUSTAIN LEVEL)
+|0-3|RELEASE RATE
+|4-7|SUSTAIN LEVEL (OPL/OPN/OPM/MADDY)
+
+//Side Note: This applies to every single voice in this chip,
+	including the OPN ExtCH. modes and even the WSG + PCM
+
+ADDR 0x03EF-0x046B (NOTE FREQUENCY LOW)
+|0-7|FREQUENCY
+
+//Side Note: Aux. Output sends the digital audio to a different
+	pair of stereophonic outputs, they could be used for rear
+	speakers, but i planned to hook it up to a Reverb IC, and
+	send it to the same analog output... the frontal speakers
+	TRS jack.
+
+ADDR 0x046C-0x04EA (NOTE FREQUENCY HIGH + NOTE ON/OFF SWITCH + AUX. OUTPUT SWITCH)
+|0-2|FREQUENCY
+|3-5|BLOCK/OCTAVE
+|6|NOTE ON
+|7|AUX. OUTPUT (0=Main Output (Default), 1=Aux. Output)
+
+//Side Note: Only applies to OPL Mode, PERC. uses 2-OP channels 16-18
+
+ADDR 0x04EB (TRE./VIB. DEPTH + PERC. MODE, 1ST OPL3)
+|0|TREMOLO
+|1|VIBRATO
+|2|PERC. MODE ENABLE
+|3|BASS DRUM
+|4|SNARE DRUM
+|5|TOMS
+|6|CYMBAL
+|7|HI-HAT
+
+//Side Note: Only applies to OPL Mode, PERC. uses 2-OP channels 34-36
+
+ADDR 0x04EC (TRE./VIB. DEPTH + PERC. MODE, 2ND OPL3)
+|0|TREMOLO
+|1|VIBRATO
+|2|PERC. MODE ENABLE
+|3|BASS DRUM ON
+|4|SNARE DRUM ON
+|5|TOMS ON
+|6|CYMBAL ON
+|7|HI-HAT ON
+
+//Side Note: What a waste of registers, my GOD! (OPM/MADDY only)
+
+ADDR 0x04ED-0x0510 (OP. 1-4 DETUNE 2)
+|0-1|DETUNE 2
+|2-7|---
+
+//Side Note: Both sound types have the same volume + panning
+	levels, so naturally, i grouped them together.
+
+	Noise only works on WSG, it has no effect on PCM.
+
+	See ADDR 0x00AC-0x00D0's side note to know how this
+	panning system works.
+
+ADDR 0x0511-0x0561 (WSG/PCM SIGNED STEREO PANNING + NOISE TOGGLE)
+|0-5|PANNING VALUE
+|6|SIGN FLIP
+|7|NOISE TOGGLE (0=Off/Wave, 1=On/LFSR Noise)
+
+//Side Note: Ring Mod. only connects to the next voice, if it's
+	the last channel, it loops back to the 1st, if it's a
+	Noise Ch. it skips to the next one and uses it.
+
+	Sync. and Ring Mod. work the same, but only on WSG.
+
+	Pitch Mod. works like on the SNES, but only on PCM.
+
+ADDR 0x0562-0x05B2 (WSG/PCM VOLUME + RING/PITCH + SYNC)
+|0-5|VOLUME LEVEL
+|6|RING/PITCH MOD.
+|7|SYNC NEXT VOICE
+
+//Side Note: SID-Like Filter settings applies to
+	individual voices, unlike the OG SID chip,
+	which does it to all 3 of them. WSG only.
+
+ADDR 0x05B3-0x05C3 (WSG SID-LIKE FILTER CONTROL 1 + NOISE SAMPLE MODE)
+|0|HIGH PASS
+|1|BAND PASS
+|2|LOW PASS
+|3|NOISE SAMPLE MODE (0=1 bit at a time, 1=8 bits at a time, like the SID)
+|4-7|FILTER RESONANCE 1
+
+ADDR 0x05C4-0x05D4 (WSG FILTER CUTOFF LOW-BYTE + WSG FURNACE SYNTH CH. 0-F)
+|0-3|FILTER CUTOFF 1
+|4-6|UNI MIX MODE (0000=Disable, 0xxx=SINGLE WAVE SYNTH)
+|7|DUO MIX MODE (1xxx=DUAL WAVE SYNTH)
+
+ADDR 0x05D5-0x05E5 (WSG FILTER CUTOFF HIGH-BYTE)
+|0-7|FILTER CUTOFF 2
+
+ADDR 0x05E6-0x05F6 (WSG FILTER CONTROL 2 / RESONANCE HIGH BYTE)
+|0-7|FILTER RESONANCE 2
+
+ADDR 0x0607-0x0617 (WSG FILTER VOLUME)
+|0-7|FILTER VOLUME
+
+ADDR 0x0618-0x0628 (WSG MODULATOR MODE + SPEED)
+|0-5|MOD. ENVELOPE SPEED/GAIN + SPEED
+|6|MOD. ENVELOPE DIRECTION (0=Decrease, 1=Increase)
+|7|MOD. ENVELOPE MODE (0=Speed, 1=Gain + Speed)
+
+ADDR 0x0629-0x0639 (WSG MODULATOR COUNTER)
+|0-6|MOD. COUNTER
+|7|
+
+ADDR 0x063A-0x064A (WSG MODULATOR FREQ. LOW)
+|0-7|FREQUENCY
+
+ADDR 0x064B-0x065B (WSG MODULATOR FREQ. HIGH + CONTROL)
+|0-3|FREQUENCY
+|4-5|---
+|6|FORCE BIT 11 OF MOD. ACCUMULATOR
+|7|HALT MOD. TABLE COUNTER
+
+ADDR 0x065C-0x066C (WSG MOD. ENVELOPE SPEED)
+|0-7|VOLUME + SWEEP SPEED (0=Disabled)
+
+ADDR 0x066D-0x067D (WSG MOD. GAIN)
+|0-5|MOD. GAIN LEVEL
+|6-7|---
+
+ADDR 0x067E-0x068E (WSG MOD. TABLE ADDR. ACCUMULATOR)
+|0-6|MOD. TABLE ACCUMULATOR
+|7|---
+
+ADDR 0x068F 0x069F (WSG MOD. COUNTER GAIN)
+|0-7|MOD. COUNTER GAIN
+
+ADDR 0x06A0-0x06B0 (WSG MOD. COUNTER INCREMENT)
+|0-3|MOD. COUNTER INCREMENT
+|4-7|
+
+//Side Note: These Mod. Tables are 32 values wide and
+	measured for every WSG voice in a row, does
+	not affect LFSR Noise. (Mod. Table is 32 rows
+	times 16 voices, so 512 values in total).
+
+	These are loaded just after the wavetables, at
+	the last 0,5KB of wavetable memory, so it should
+	be like an extra wavetable which is split into
+	16 pieces and only modulates the other voices.
+
+ADDR 0x06B1-0x08B1 (WSG SIGNED MOD. TABLE CH. 0-F)
+|0-6|MOD. VALUE
+|7|BIT FLIP
+
+//Side Note: PCM Drivers should convert to only using
+	low byte when on an 8 bit (PC-XT) ISA bus
+
+ADDR 0x08B2-0x08F2 (PCM BITBANG LOW BYTE)
+|0-7|PCM DATA 1-8 BITS
+
+//Side Note: Only available on a 16 bit (PC-AT) ISA bus or higher
+
+ADDR 0x08F3-0x0933 (PCM BITBANG HIGH BYTE)
+|0-7|PCM DATA 9-16 BITS
+
+//Side Note: There can only be 2 Noise Channels playing at a time
+
+ADDR 0x0934-0x0975 (NOISE LFSR 1 LOW-MIDDLE)
+|0-7|NOISE LFSR 1
+
+ADDR 0x0976 (NOISE LFSR 1 HIGH)
+|0-6|NOISE LFSR 1
+|7|---
+
+ADDR 0x0977-0x0978 (NOISE LFSR 2 LOW-MIDDLE)
+|0-7|NOISE LFSR 2
+
+ADDR 0x0979 (NOISE LFSR 2 HIGH)
+|0-6|NOISE LFSR 2
+|7|---
+
+ADDR 0x097A-0x098A (WSG SYNTH UPDATE RATE CH. 0-F)
+|0-7|SYNTH UPDATE RATE
+
+ADDR 0x098B-0x099B (WSG SYNTH SPEED CH. 0-F)
+|0-7|SYNTH SPEED
+
+ADDR 0x09AC-0x09BC (WSG SYNTH AMOUNT CH. 0-F)
+|0-7|SYNTH AMOUNT
+
+//Side Note: This address is only for WSG Phase Mod.
+
+ADDR 0x09BD-0x09CD (WSG SYNTH POWER CH. 0-F)
+|0-7|SYNTH POWER
+
+//Side Note: Notice how it's only 7 bits? that because
+	the Wavetable RAM only occupies 64.5K of space
+	out of the 128MiB of max sample data available
+	on the sound card's DDR3 SODIMM RAM socket.
+
+	Also, the Wavetables only occupy 512B each if
+	that wasn't obvious before.
+
+	see Mod. Table Side Note to check why the last
+	half-kilobyte isn't available
+
+ADDR 0x9CE-0x09DE (WSG SYNTH WAVE 1 CH. 0-F)
+|0-6|WAVE 1 SELECTION
+|7|---
+
+//Side Note: This is only for Dual Wave Synth
+
+ADDR 0x09EF-0x09FF (WSG SYNTH WAVE 2 CH. 0-F)
+|0-6|WAVE 2 SELECTION
+|7|---
+------------------------------------------------------------------------------------------------------
