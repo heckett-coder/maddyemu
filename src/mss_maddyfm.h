@@ -241,27 +241,26 @@ public:
 	// system-wide registers
 	uint32_t timer_a_value() const                   { return byte(0x01, 0, 8); } 
 	uint32_t timer_b_value() const                   { return byte(0x02, 0, 8); }
-	uint32_t status_mask() const                     { return byte(0x04, 0, 8) & 0x78; }
 	uint32_t irq_reset() const                       { return byte(0x00, 7, 1); }
-	uint32_t reset_timer_b() const                   { return byte(0x00, 7, 1) | byte(0x00, 5, 1); }
-	uint32_t reset_timer_a() const                   { return byte(0x00, 7, 1) | byte(0x00, 6, 1); }
+	uint32_t reset_timer_b() const                   { return byte(0x00, 0, 1); }
+	uint32_t reset_timer_a() const                   { return byte(0x00, 1, 1); }
 	uint32_t enable_timer_b() const                  { return 1; }
 	uint32_t enable_timer_a() const                  { return 1; }
-	uint32_t load_timer_b() const                    { return byte(0x00, 1, 1); }
-	uint32_t load_timer_a() const                    { return byte(0x00, 0, 1); }
+	uint32_t load_timer_b() const                    { return byte(0x00, 2, 1); }
+	uint32_t load_timer_a() const                    { return byte(0x00, 3, 1); }
 	uint32_t note_select() const                     { return byte(0x08, 6, 1); }
-	uint32_t lfo_am_depth() const                    { return byte(0x4eb, 7, 1); }
-	uint32_t lfo_pm_depth() const                    { return byte(0x4eb, 6, 1); }
-	uint32_t lfo_am_depth() const                    { return byte(0x4ec, 7, 1); }
-	uint32_t lfo_pm_depth() const                    { return byte(0x4ec, 6, 1); }
-	uint32_t rhythm_enable() const                   { return byte(0x4eb, 5, 1); }
-	uint32_t rhythm_enable() const                   { return byte(0x4ec, 5, 1); }
-	uint32_t rhythm_keyon() const                    { return byte(0x4eb, 4, 0); }
-	uint32_t rhythm_keyon() const                    { return byte(0x4ec, 4, 0); }
-	uint32_t fourop_enable() const                   { return IsOpl != IsMaddy ? byte(0x04, 0, 18) : 0; }
+	uint32_t lfo_am_depth() const                    { return byte(0x4eb, 0, 1); }
+	uint32_t lfo_pm_depth() const                    { return byte(0x4eb, 1, 1); }
+	uint32_t lfo_am_depth() const                    { return byte(0x4ec, 0, 1); }
+	uint32_t lfo_pm_depth() const                    { return byte(0x4ec, 1, 1); }
+	uint32_t rhythm_enable() const                   { return byte(0x4eb, 2, 1); }
+	uint32_t rhythm_enable() const                   { return byte(0x4ec, 2, 1); }
+	uint32_t rhythm_keyon() const                    { return byte(0x4eb, 3, 5); }
+	uint32_t rhythm_keyon() const                    { return byte(0x4ec, 3, 5); }
+	uint32_t fourop_enable() const                   { return IsOpl != IsMaddy ? (m_regdata[0x04]&63)|(m_regdata[0x05]<<6)|((m_regdata[0x06]&15)<<14) : 0; }
 
 	// per-channel registers
-	uint32_t ch_block_freq(uint32_t choffs) const    { return word(0xb0, 0, 5, 0xa0, 0, 8, choffs); }
+	uint32_t ch_block_freq(uint32_t choffs) const    { return word(0x4ea, 0, 5, 0x3ef, 0, 8, choffs); }
 	uint32_t ch_feedback(uint32_t choffs) const      { return byte(0xc0, 1, 3, choffs); }
 	uint32_t ch_algorithm(uint32_t choffs) const     { return byte(0xc0, 0, 1, choffs) | (IsOpn != IsOpm != IsMaddy ? (8 | (byte(0xc3, 0, 1, choffs) << 1)) : 0); }
 	uint32_t ch_output_any(uint32_t choffs) const    { return newflag() ? byte(0xc0 + choffs, 2, 2) : 1; }
@@ -310,9 +309,9 @@ protected:
 	uint16_t m_waveform[WAVEFORMS][WAVEFORM_LENGTH]; // waveforms
 };
 
-using opl_registers = maddy_registers_base<1>;
-using opl2_registers = maddy_registers_base<2>;
-using opl3_registers = maddy_registers_base<3>;
+using opm_registers = maddy_registers_base<1>;
+using opn_registers = maddy_registers_base<2>;
+using opl_registers = maddy_registers_base<3>;
 
 
 
@@ -320,100 +319,7 @@ using opl3_registers = maddy_registers_base<3>;
 //  OPL IMPLEMENTATION CLASSES
 //*********************************************************
 
-// ======================> ym3526
-
-class ym3526
-{
-public:
-	using fm_engine = fm_engine_base<opl_registers>;
-	using output_data = fm_engine::output_data;
-	static constexpr uint32_t OUTPUTS = fm_engine::OUTPUTS;
-
-	// constructor
-	ym3526(mss_interface &intf);
-
-	// reset
-	void reset();
-
-	// save/restore
-	void save_restore(mss_saved_state &state);
-
-	// pass-through helpers
-	uint32_t sample_rate(uint32_t input_clock) const { return m_fm.sample_rate(input_clock); }
-	void invalidate_caches() { m_fm.invalidate_caches(); }
-
-	// read access
-	uint8_t read_status();
-	uint8_t read(uint32_t offset);
-
-	// write access
-	void write_address(uint8_t data);
-	void write_data(uint8_t data);
-	void write(uint32_t offset, uint8_t data);
-
-	// generate samples of sound
-	void generate(output_data *output, uint32_t numsamples = 1);
-
-	fm_engine* debug_fm_engine() { return &m_fm; }
-protected:
-	// internal state
-	uint8_t m_address;               // address register
-	fm_engine m_fm;                  // core FM engine
-};
-
-//*********************************************************
-//  OPL2 IMPLEMENTATION CLASSES
-//*********************************************************
-
-// ======================> ym3812
-
-class ym3812
-{
-public:
-	using fm_engine = fm_engine_base<opl2_registers>;
-	using output_data = fm_engine::output_data;
-	static constexpr uint32_t OUTPUTS = fm_engine::OUTPUTS;
-
-	// constructor
-	ym3812(mss_interface &intf);
-
-	// reset
-	void reset();
-
-	// save/restore
-	void save_restore(mss_saved_state &state);
-
-	// pass-through helpers
-	uint32_t sample_rate(uint32_t input_clock) const { return m_fm.sample_rate(input_clock); }
-	void invalidate_caches() { m_fm.invalidate_caches(); }
-
-	// read access
-	uint8_t read_status();
-	uint8_t read(uint32_t offset);
-
-	// write access
-	void write_address(uint8_t data);
-	void write_data(uint8_t data);
-	void write(uint32_t offset, uint8_t data);
-
-	// generate samples of sound
-	void generate(output_data *output, uint32_t numsamples = 1);
-
-	fm_engine* debug_fm_engine() { return &m_fm; }
-
-protected:
-	// internal state
-	uint8_t m_address;               // address register
-	fm_engine m_fm;                  // core FM engine
-};
-
-//*********************************************************
-//  OPL3 IMPLEMENTATION CLASSES
-//*********************************************************
-
-// ======================> ymf262
-
-class ymf262
+class opl
 {
 public:
 	using fm_engine = fm_engine_base<opl3_registers>;
