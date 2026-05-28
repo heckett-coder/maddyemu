@@ -104,7 +104,7 @@ ADDR 0x00AC-0x00D0 (FM SIGNED STEREO PANNING)
 ADDR 0x00D1-0x0161 (OP. 1-4 WAVE+OCTAVE)
 |0-3|Octave Multiplier (0000=0.5 Octaves, 0001=1 Octave... 1111=16 Octaves)
 |4|Waveform Bank (0xxx=OPL Series Waveforms, 1xxx=Extra Waveforms (MADDY) )
-|5-7|Waveform Selection (x000-x011=OPL2/Triangle Waves, x100-x111=OPL3/Saw Waves)
+|5-7|Waveform Selection (x000-x011=OPL2/Custom Bank 1, x100-x111=OPL3/Custom Bank 2)
 
 ADDR 0x0162-0x0186 (FM-AM SENSITIVITY)
 |0-2|FM SENSITIVITY

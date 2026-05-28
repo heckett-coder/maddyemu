@@ -263,9 +263,7 @@ public:
 	uint32_t ch_block_freq(uint32_t choffs) const    { return word(0x4ea, 0, 5, 0x3ef, 0, 8, choffs); }
 	uint32_t ch_feedback(uint32_t choffs) const      { return byte(0xc0, 1, 3, choffs); }
 	uint32_t ch_algorithm(uint32_t choffs) const     { return byte(0xc0, 0, 1, choffs) | (IsOpn != IsOpm != IsMaddy ? (8 | (byte(0xc3, 0, 1, choffs) << 1)) : 0); }
-	uint32_t ch_output_any(uint32_t choffs) const    { return newflag() ? byte(0xc0 + choffs, 2, 2) : 1; }
-	uint32_t ch_output_0(uint32_t choffs) const      { return newflag() ? byte(0xc0 + choffs, 2, 1) : 1; }
-	uint32_t ch_output_1(uint32_t choffs) const      { return newflag() ? byte(0xc0 + choffs, 3, 1); }
+	uint32_t ch_output_toggle(uint32_t choffs) const { return newflag() ? byte(0x4ea + choffs, 7, 1) : 1; }
 
 	// per-operator registers
 	uint32_t op_lfo_am_enable(uint32_t opoffs) const { return byte(0x20, 7, 1, opoffs); }
@@ -279,7 +277,7 @@ public:
 	uint32_t op_decay_rate(uint32_t opoffs) const    { return byte(0x60, 0, 4, opoffs); }
 	uint32_t op_sustain_level(uint32_t opoffs) const { return byte(0x80, 4, 4, opoffs); }
 	uint32_t op_release_rate(uint32_t opoffs) const  { return byte(0x80, 0, 4, opoffs); }
-	uint32_t op_waveform(uint32_t opoffs) const      { return IsOpl2Plus ? byte(0xe0, 0, newflag() ? 3 : 2, opoffs) : 0; }
+	uint32_t op_waveform(uint32_t opoffs) const      { return IsOpl ? byte(0xe0, 0, newflag() ? 3 : 2, opoffs) : 0; }
 
 protected:
 	// return a bitfield extracted from a byte
