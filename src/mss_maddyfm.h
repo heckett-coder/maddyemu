@@ -155,7 +155,7 @@ namespace mss
 //
 
 template<int Revision>
-class opl_registers_base : public fm_registers_base
+class maddy_registers_base : public fm_registers_base
 {
 	static constexpr bool IsOpl = (Revision == 1);
 	static constexpr bool IsOpn = (Revision == 2);
@@ -167,7 +167,7 @@ public:
 	static constexpr uint32_t OUTPUTS = IsMaddy ? 2 : 1;
 	static constexpr uint32_t CHANNELS = IsMaddy ? 36 : 18 : (IsOpl ? 36 : 18 : (IsOpn ? 18 : 12 : 6 : (IsOpm ? 16 : 8 : 1)));
 	static constexpr uint32_t ALL_CHANNELS = (1 << CHANNELS) - 1;
-	static constexpr uint32_t OPERATORS = IsMaddy || IsOpl ? CHANNELS * 2 : (IsOpm || IsOpn ? CHANNELS * 4);
+	static constexpr uint32_t OPERATORS = IsMaddy != IsOpl ? CHANNELS * 2 : (IsOpm != IsOpn ? CHANNELS * 4);
 	static constexpr uint32_t WAVEFORMS = IsMaddy ? 16 : (IsOpl ? 8 : 1);
 	static constexpr uint32_t REGISTERS = IsMaddy ? 0x511 : (IsOpl ? 0x400 : (IsOpn ? 0x600 : (IsOpm ? 0x200 : 0x000)));
 	static constexpr uint32_t REG_MODE = 0x04;
@@ -178,7 +178,7 @@ public:
 	static constexpr uint8_t STATUS_IRQ = 0x80;
 
 	// constructor
-	opl_registers_base();
+	maddy_registers_base();
 
 	// reset to initial state
 	void reset();
@@ -258,12 +258,12 @@ public:
 	uint32_t rhythm_enable() const                   { return byte(0x4ec, 5, 1); }
 	uint32_t rhythm_keyon() const                    { return byte(0x4eb, 4, 0); }
 	uint32_t rhythm_keyon() const                    { return byte(0x4ec, 4, 0); }
-	uint32_t fourop_enable() const                   { return IsMaddy ? byte(0x104, 0, 18) : 0; }
+	uint32_t fourop_enable() const                   { return IsOpl != IsMaddy ? byte(0x04, 0, 18) : 0; }
 
 	// per-channel registers
 	uint32_t ch_block_freq(uint32_t choffs) const    { return word(0xb0, 0, 5, 0xa0, 0, 8, choffs); }
 	uint32_t ch_feedback(uint32_t choffs) const      { return byte(0xc0, 1, 3, choffs); }
-	uint32_t ch_algorithm(uint32_t choffs) const     { return byte(0xc0, 0, 1, choffs) | (IsOpl3Plus ? (8 | (byte(0xc3, 0, 1, choffs) << 1)) : 0); }
+	uint32_t ch_algorithm(uint32_t choffs) const     { return byte(0xc0, 0, 1, choffs) | (IsOpn != IsOpm != IsMaddy ? (8 | (byte(0xc3, 0, 1, choffs) << 1)) : 0); }
 	uint32_t ch_output_any(uint32_t choffs) const    { return newflag() ? byte(0xc0 + choffs, 2, 2) : 1; }
 	uint32_t ch_output_0(uint32_t choffs) const      { return newflag() ? byte(0xc0 + choffs, 2, 1) : 1; }
 	uint32_t ch_output_1(uint32_t choffs) const      { return newflag() ? byte(0xc0 + choffs, 3, 1); }
@@ -310,9 +310,9 @@ protected:
 	uint16_t m_waveform[WAVEFORMS][WAVEFORM_LENGTH]; // waveforms
 };
 
-using opl_registers = opl_registers_base<1>;
-using opl2_registers = opl_registers_base<2>;
-using opl3_registers = opl_registers_base<3>;
+using opl_registers = maddy_registers_base<1>;
+using opl2_registers = maddy_registers_base<2>;
+using opl3_registers = maddy_registers_base<3>;
 
 
 
