@@ -9,7 +9,7 @@ modification, are permitted provided that the following conditions are met:
 1. Redistributions of source code must retain the above copyright notice, this
    list of conditions and the following disclaimer.
 
-   2. Redistributions in binary form must reproduce the above copyright notice,
+2. Redistributions in binary form must reproduce the above copyright notice,
    this list of conditions and the following disclaimer in the documentation
    and/or other materials provided with the distribution.
 
@@ -35,9 +35,10 @@ This particular edit is called MADDY-Emu and is meant for a fantasy chip!
 This source code and all binaries produced with it officially should be
 FREE (as in both liberated and of no monetary gain)! Whichever products
 use this code as a firmware should provide a link to their branch's repo
-on Github and also another for the main official repository of this
-modification! THE PAID PRODUCT IN QUESTION MUST NOT INCLUDE THE FIRMWARE,
-IT SHOULD INSTEAD GIVE INSTRUCTIONS ON HOW TO SET IT UP IF POSSIBLE!
+on Github and also make it public for all to see and use! This is a 
+requirement for any modification! THE PAID PRODUCT IN QUESTION MUST NOT
+INCLUDE THE FIRMWARE, IT SHOULD INSTEAD come with INSTRUCTIONS ON HOW TO
+SET IT UP IF POSSIBLE!
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -125,7 +126,7 @@ namespace mss
 //              --xxx--- Operator 1 Feedback
 //              -----xxx Algorithm (4op extension) 
 //              -------x Algorithm (2op bit) 
-//        AC-D0 x------- Sign Flip (0=Left, 1=Right)
+//        AC-D0 x------- Stereo Sign Flip (0=Left, 1=Right)
 //              -xxxxxxx Signed Stereo Panning Value
 //      162-186 -----xxx FM Sensitivity
 //              ---xx--- AM Sensitivity
@@ -140,7 +141,7 @@ namespace mss
 //     Per-operator registers:
 //        1B-AB x------- AM Enable
 //              -xxxxxxx Total Level
-//       D1-161 xxxx---- Waveform Selector (0xxx= Standerd OPL3 Waves, 1xxx=MaddyFM Extra Waves)
+//       D1-161 xxxx---- Waveform Selector (0xxx= Standard OPL3 Waves, 1xxx=MaddyFM Custom Waves)
 //              ----xxxx Octave Multiplier
 //      1AC-23B xx------ Rate Scaling
 //              --x----- SSG-EG Enable
@@ -152,6 +153,7 @@ namespace mss
 //      35E-3EE xxxx---- Sustain Level
 //              ----xxxx Release Rate
 //      4ED-510 ------xx Detune 2
+//              xxxxxx-- Waveform Address (For custom waves, 0-63)
 //
 
 template<int Revision>

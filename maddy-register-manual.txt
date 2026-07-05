@@ -14,6 +14,8 @@ HEADER (not really): Includes song info (title, album,
 		at the end of the file in Little
 		Endian mode.
 
+/=|==GLOBAL REGISTERS==|=\
+
 ADDR 0x0000 (STATUS/DATA REGISTER)
 |0|TIMER 2 RESET
 |1|TIMER 1 RESET
@@ -35,11 +37,13 @@ ADDR 0x0002 (TIMER 2)
 ADDR 0x0003 (GLOBAL SOUND CONTROL 1)
 
 //Side Note: Wavetables should always be 512x256 (Width x Height) in size,
-	if you want smaller wave sizes, do it in software, it can't be hard
-	can it?.
+	if you want smaller wave sizes, do it in software, just a heads up,
+	it's not gonna make the RAM usage any smaller, only the storage will.
+
 //Side Note: Sample channel amount should go up or down by 8CH per bit, if
 	you need to play CD Audio, go do so on the first enabled channels via
 	software and constant write/reading, like with SB16's DMA sampling.
+
 //Side Note: There can only be 1 FM inst. type per mode. It would have been
 	AWESOME to use different YAMAHA sound sources, but i personally want
 	it to be as compact as possible. Every byte counts, y'know?
@@ -75,6 +79,8 @@ ADDR 0x0006 (4OP FM MIX 3 - GLOBAL SOUND CONTROL 3)
 |4|---
 |5-7|ExtCH3+9+15 MODE (OPN Mode Only) (000-Normal, 100-ExtCH3, 010-ExtCH9... 111-ExtCH3+9+15)
 
+/=|==FM SYNTH REGISTERS==|=\
+
 //Side Note: When using 2-OP mode, bit 2 has no effect.
 
 ADDR 0x0008-0x001A (MADDY FM INST. CONTROL)
@@ -102,8 +108,8 @@ ADDR 0x00AC-0x00D0 (FM SIGNED STEREO PANNING)
 |7|SIGN FLIP (0=Left, 1=Right)
 
 ADDR 0x00D1-0x0161 (OP. 1-4 WAVE+OCTAVE)
-|0-3|Octave Multiplier (0000=0.5 Octaves, 0001=1 Octave... 1111=16 Octaves)
-|4|Waveform Bank (0xxx=OPL Series Waveforms, 1xxx=Extra Waveforms (MADDY) )
+|0-3|Octave Multiplier (0000=Half Octave, 0001=1 Octave... 1111=16 Octaves)
+|4|Waveform Bank (0xxx=OPL Series Waveforms, 1xxx=Custom Waveforms (MADDY) )
 |5-7|Waveform Selection (x000-x011=OPL2/Custom Bank 1, x100-x111=OPL3/Custom Bank 2)
 
 ADDR 0x0162-0x0186 (FM-AM SENSITIVITY)
@@ -152,7 +158,7 @@ ADDR 0x03EF-0x046B (NOTE FREQUENCY LOW)
 	send it to the same analog output... the frontal speakers
 	TRS jack.
 
-ADDR 0x046C-0x04EA (NOTE FREQUENCY HIGH + NOTE ON/OFF SWITCH + AUX. OUTPUT SWITCH)
+ADDR 0x046C-0x04EA (NOTE FREQUENCY HIGH + NOTE ON SWITCH + AUX. OUTPUT SWITCH)
 |0-2|FREQUENCY
 |3-5|BLOCK/OCTAVE
 |6|NOTE ON
@@ -182,11 +188,15 @@ ADDR 0x04EC (TRE./VIB. DEPTH + PERC. MODE, 2ND OPL3)
 |6|CYMBAL ON
 |7|HI-HAT ON
 
-//Side Note: What a waste of registers, my GOD! (OPM/MADDY only)
+//Side Note: What a waste of registers? Not Anymore!
+	This baby can use up to 64 wavetables now! Have
+	fun with your custom Waveforms! (OPM/MADDY Only)
 
-ADDR 0x04ED-0x0510 (OP. 1-4 DETUNE 2)
+ADDR 0x04ED-0x0510 (OP. 1-4 DETUNE 2 + CUSTOM WAVE SELECTION)
 |0-1|DETUNE 2
-|2-7|---
+|2-7|CUSTOM WAVE ADDRESS
+
+/=|==WSG + PCM REGISTERS==|=\
 
 //Side Note: Both sound types have the same volume + panning
 	levels, so naturally, i grouped them together.
@@ -199,13 +209,13 @@ ADDR 0x04ED-0x0510 (OP. 1-4 DETUNE 2)
 ADDR 0x0511-0x0561 (WSG/PCM SIGNED STEREO PANNING + NOISE TOGGLE)
 |0-5|PANNING VALUE
 |6|SIGN FLIP
-|7|NOISE TOGGLE (0=Off/Wave, 1=On/LFSR Noise)
+|7|NOISE TOGGLE (0=Noise Off, 1=Noise On)
 
 //Side Note: Ring Mod. only connects to the next voice, if it's
 	the last channel, it loops back to the 1st, if it's a
 	Noise Ch. it skips to the next one and uses it.
 
-	Sync. and Ring Mod. work the same, but only on WSG.
+	Sync. and Ring Mod. work the same, but only applies to WSG.
 
 	Pitch Mod. works like on the SNES, but only on PCM.
 
@@ -222,7 +232,7 @@ ADDR 0x05B3-0x05C3 (WSG SID-LIKE FILTER CONTROL 1 + NOISE SAMPLE MODE)
 |0|HIGH PASS
 |1|BAND PASS
 |2|LOW PASS
-|3|NOISE SAMPLE MODE (0=1 bit at a time, 1=8 bits at a time, like the SID)
+|3|NOISE SAMPLE MODE (0=Noise only, 1=Noise + Waveform AM)
 |4-7|FILTER RESONANCE 1
 
 ADDR 0x05C4-0x05D4 (WSG FILTER CUTOFF LOW-BYTE + WSG FURNACE SYNTH CH. 0-F)
@@ -271,23 +281,32 @@ ADDR 0x067E-0x068E (WSG MOD. TABLE ADDR. ACCUMULATOR)
 ADDR 0x068F 0x069F (WSG MOD. COUNTER GAIN)
 |0-7|MOD. COUNTER GAIN
 
-ADDR 0x06A0-0x06B0 (WSG MOD. COUNTER INCREMENT)
+//Side Note: NOISE VOLUME affects the amplitude between
+	WAVE + NOISE AM mode, this is mostly for mixing
+	purposes only and doesn't actually change the volume.
+	
+	When value is >7, it lowers the Noise
+	output and doesn't affect the Wavetable output.
+	
+	When value is <7, do the opposite, lower Waveform
+	output and keep Noise at same volume.
+
+	When value is at 7, keep both at their max amplitude
+
+	7 must always be the default value on sound driver and
+	reset to that when sound chip is halted
+
+ADDR 0x06A0-0x06B0 (WSG MOD. COUNTER INCREMENT + NOISE+WAVE AM VOLUME)
 |0-3|MOD. COUNTER INCREMENT
-|4-7|
+|4-7|NOISE + WAVE AM VOLUME
 
-//Side Note: These Mod. Tables are 32 values wide and
-	measured for every WSG voice in a row, does
-	not affect LFSR Noise. (Mod. Table is 32 rows
-	times 16 voices, so 512 values in total).
+//Side Note: These Mod. Tables are actually wavetables
+	modulating the other for every WSG voice in a row,
+	does not affect LFSR Noise.
 
-	These are loaded just after the wavetables, at
-	the last 0,5KB of wavetable memory, so it should
-	be like an extra wavetable which is split into
-	16 pieces and only modulates the other voices.
-
-ADDR 0x06B1-0x08B1 (WSG SIGNED MOD. TABLE CH. 0-F)
-|0-6|MOD. VALUE
-|7|BIT FLIP
+ADDR 0x06B1-0x08B1 (WSG MOD. WAVEFORM SELECTION CH. 0-F)
+|0-6|MOD. WAVE ADDRESS
+|7|---
 
 //Side Note: PCM Drivers should convert to only using
 	low byte when on an 8 bit (PC-XT) ISA bus
@@ -302,6 +321,9 @@ ADDR 0x08F3-0x0933 (PCM BITBANG HIGH BYTE)
 
 //Side Note: There can only be 2 Noise Channels playing at a time
 
+	DISCLAIMER: DO NOT EDIT LFSR REGISTERS MANUALLY!!! THE CHIP
+	WILL USE THEM AUTOMATICALLY, CHANGING IT WILL ONLY BREAK IT!!!
+
 ADDR 0x0934-0x0975 (NOISE LFSR 1 LOW-MIDDLE)
 |0-7|NOISE LFSR 1
 
@@ -315,6 +337,13 @@ ADDR 0x0977-0x0978 (NOISE LFSR 2 LOW-MIDDLE)
 ADDR 0x0979 (NOISE LFSR 2 HIGH)
 |0-6|NOISE LFSR 2
 |7|---
+
+//Side Note: This is a hardware implementation of Furnace's
+	Software WSG Synth feature, and should be treated as such
+	when adding this chip to a Furnace fork, sneakily replace
+	Furnace's Wave Synth with this one, no one should notice
+	that it works different until they look inside the code /
+	at the registers of the chip.
 
 ADDR 0x097A-0x098A (WSG SYNTH UPDATE RATE CH. 0-F)
 |0-7|SYNTH UPDATE RATE
@@ -331,23 +360,20 @@ ADDR 0x09BD-0x09CD (WSG SYNTH POWER CH. 0-F)
 |0-7|SYNTH POWER
 
 //Side Note: Notice how it's only 7 bits? that because
-	the Wavetable RAM only occupies 64.5K of space
+	the Wavetable RAM only occupies 64K of space
 	out of the 128MiB of max sample data available
 	on the sound card's DDR3 SODIMM RAM socket.
 
 	Also, the Wavetables only occupy 512B each if
 	that wasn't obvious before.
 
-	see Mod. Table Side Note to check why the last
-	half-kilobyte isn't available
-
-ADDR 0x9CE-0x09DE (WSG SYNTH WAVE 1 CH. 0-F)
-|0-6|WAVE 1 SELECTION
+ADDR 0x9CE-0x09DE (WSG SYNTH WAVE 1 / WSG WAVE SELECTION CH. 0-F)
+|0-6|WAVE 1 ADDRESS
 |7|---
 
 //Side Note: This is only for Dual Wave Synth
 
 ADDR 0x09EF-0x09FF (WSG SYNTH WAVE 2 CH. 0-F)
-|0-6|WAVE 2 SELECTION
+|0-6|WAVE 2 ADDRESS
 |7|---
 ------------------------------------------------------------------------------------------------------
