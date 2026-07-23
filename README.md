@@ -5,3 +5,5 @@ TODO
 3. Start doing WSG and PCM
 4. Finish WSG
 5. Finish PCM
+6. Make and finish documentation
+7. Implement on Furnace fork
