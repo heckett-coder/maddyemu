@@ -159,7 +159,7 @@ namespace mss
 template<int Revision>
 class maddy_registers_base : public fm_registers_base
 {
-	static constexpr bool IsOpl = (Revision == 1);
+	static constexpr bool IsOpl = (Revision <= 1);
 	static constexpr bool IsOpn = (Revision == 2);
 	static constexpr bool IsOpm = (Revision == 3);
 	static constexpr bool IsMaddy = (Revision >= 4);
@@ -192,28 +192,19 @@ public:
 	static constexpr uint32_t channel_offset(uint32_t chnum)
 	{
 		assert(chnum < CHANNELS);
-		if (!IsMaddy)
-			return chnum;
-		else
-			return (chnum % 9) + 0x100 * (chnum / 9);
+		return chnum;
 	}
 
 	// map operator number to register offset
 	static constexpr uint32_t operator_offset(uint32_t opnum)
 	{
 		assert(opnum < OPERATORS);
-		if (!IsMaddy)
-			return opnum + 2 * (opnum / 6);
-		else
-			return (opnum % 18) + 2 * ((opnum % 18) / 6) + 0x100 * (opnum / 18);
+		return opnum;
 	}
 
 	// return an array of operator indices for each channel
 	struct operator_mapping { uint32_t chan[CHANNELS]; };
 	void operator_map(operator_mapping &dest) const;
-
-	// OPL4 apparently can read back FM registers?
-	uint8_t read(uint16_t index) const { return m_regdata[index]; }
 
 	// handle writes to the register array
 	bool write(uint16_t index, uint8_t data, uint32_t &chan, uint32_t &opmask);
@@ -251,14 +242,14 @@ public:
 	uint32_t load_timer_b() const                    { return byte(0x00, 2, 1); }
 	uint32_t load_timer_a() const                    { return byte(0x00, 3, 1); }
 	uint32_t note_select() const                     { return byte(0x08, 6, 1); }
-	uint32_t lfo_am_depth() const                    { return byte(0x4eb, 0, 1); }
-	uint32_t lfo_pm_depth() const                    { return byte(0x4eb, 1, 1); }
-	uint32_t lfo_am_depth() const                    { return byte(0x4ec, 0, 1); }
-	uint32_t lfo_pm_depth() const                    { return byte(0x4ec, 1, 1); }
-	uint32_t rhythm_enable() const                   { return byte(0x4eb, 2, 1); }
-	uint32_t rhythm_enable() const                   { return byte(0x4ec, 2, 1); }
-	uint32_t rhythm_keyon() const                    { return byte(0x4eb, 3, 5); }
-	uint32_t rhythm_keyon() const                    { return byte(0x4ec, 3, 5); }
+	uint32_t lfo_am_depth1() const                   { return byte(0x4eb, 0, 1); }
+	uint32_t lfo_pm_depth1() const                   { return byte(0x4eb, 1, 1); }
+	uint32_t lfo_am_depth2() const                   { return byte(0x4ec, 0, 1); }
+	uint32_t lfo_pm_depth2() const                   { return byte(0x4ec, 1, 1); }
+	uint32_t rhythm_enable1() const                  { return byte(0x4eb, 2, 1); }
+	uint32_t rhythm_enable2() const                  { return byte(0x4ec, 2, 1); }
+	uint32_t rhythm_keyon1() const                   { return byte(0x4eb, 3, 5); }
+	uint32_t rhythm_keyon2() const                   { return byte(0x4ec, 3, 5); }
 	uint32_t fourop_enable() const                   { return IsOpl != IsMaddy ? (m_regdata[0x04]&63)|(m_regdata[0x05]<<6)|((m_regdata[0x06]&15)<<14) : 0; }
 
 	// per-channel registers
@@ -319,15 +310,15 @@ using opl_registers = maddy_registers_base<3>;
 //  OPL IMPLEMENTATION CLASSES
 //*********************************************************
 
-class opl
+class maddyfm
 {
 public:
-	using fm_engine = fm_engine_base<opl3_registers>;
+	using fm_engine = fm_engine_base<maddy_registers>;
 	using output_data = fm_engine::output_data;
 	static constexpr uint32_t OUTPUTS = fm_engine::OUTPUTS;
 
 	// constructor
-	ymf262(mss_interface &intf);
+	maddyfm(mss_interface &intf);
 
 	// reset
 	void reset();
