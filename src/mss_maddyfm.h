@@ -156,13 +156,13 @@ namespace mss
 //              xxxxxx-- Waveform Address (For custom waves, 0-63)
 //
 
-template<int Revision>
+template<int ChipMode>
 class maddy_registers_base : public fm_registers_base
 {
-	static constexpr bool IsOpl = (Revision <= 1);
-	static constexpr bool IsOpn = (Revision == 2);
-	static constexpr bool IsOpm = (Revision == 3);
-	static constexpr bool IsMaddy = (Revision >= 4);
+	static constexpr bool IsOpl = (ChipMode <= 1);
+	static constexpr bool IsOpn = (ChipMode == 2);
+	static constexpr bool IsOpm = (ChipMode == 3);
+	static constexpr bool IsMaddy = (ChipMode >= 4);
 
 public:
 	// constants
@@ -171,7 +171,7 @@ public:
 	static constexpr uint32_t ALL_CHANNELS = (1 << CHANNELS) - 1;
 	static constexpr uint32_t OPERATORS = IsMaddy != IsOpl ? CHANNELS * 2 : (IsOpm != IsOpn ? CHANNELS * 4);
 	static constexpr uint32_t WAVEFORMS = IsMaddy ? 16 : (IsOpl ? 8 : 1);
-	static constexpr uint32_t REGISTERS = IsMaddy ? 0x511 : (IsOpl ? 0x400 : (IsOpn ? 0x600 : (IsOpm ? 0x200 : 0x000)));
+	static constexpr uint32_t REGISTERS = IsMaddy ? 0x511 : 0x000;
 	static constexpr uint32_t REG_MODE = 0x04;
 	static constexpr uint32_t EG_CLOCK_DIVIDER = 1;
 	static constexpr uint8_t STATUS_TIMERA = 0x40;
