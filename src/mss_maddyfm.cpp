@@ -100,12 +100,20 @@ opl_registers_base<Revision>::opl_registers_base() :
 	uint16_t *wf5 = &m_waveform[5 % WAVEFORMS][0];
 	uint16_t *wf6 = &m_waveform[6 % WAVEFORMS][0];
 	uint16_t *wf7 = &m_waveform[7 % WAVEFORMS][0];
+	uint16_t *wf8 = &m_waveform[8 % WAVEFORMS][0];
+	uint16_t *wf9 = &m_waveform[9 % WAVEFORMS][0];
+	uint16_t *wfA = &m_waveform[10 % WAVEFORMS][0];
+	uint16_t *wfB = &m_waveform[11 % WAVEFORMS][0];
+	uint16_t *wfC = &m_waveform[12 % WAVEFORMS][0];
+	uint16_t *wfD = &m_waveform[13 % WAVEFORMS][0];
+	uint16_t *wfE = &m_waveform[14 % WAVEFORMS][0];
+	uint16_t *wfF = &m_waveform[15 % WAVEFORMS][0];
 
 	// create the waveforms
 	for (uint32_t index = 0; index < WAVEFORM_LENGTH; index++)
 		wf0[index] = abs_sin_attenuation(index) | (bitfield(index, 9) << 15);
 
-	if (WAVEFORMS >= 4)
+	if (WAVEFORMS >= 8)
 	{
 		uint16_t zeroval = wf0[0];
 		for (uint32_t index = 0; index < WAVEFORM_LENGTH; index++)
@@ -113,19 +121,26 @@ opl_registers_base<Revision>::opl_registers_base() :
 			wf1[index] = bitfield(index, 9) ? zeroval : wf0[index];
 			wf2[index] = wf0[index] & 0x7fff;
 			wf3[index] = bitfield(index, 8) ? zeroval : (wf0[index] & 0x7fff);
-			if (WAVEFORMS >= 8)
+			wf4[index] = bitfield(index, 9) ? zeroval : wf0[index * 2];
+			wf5[index] = bitfield(index, 9) ? zeroval : wf0[(index * 2) & 0x1ff];
+			wf6[index] = bitfield(index, 9) << 15;
+			wf7[index] = (bitfield(index, 9) ? (index ^ 0x13ff) : index) << 3;
+			if (WAVEFORMS >= 16)
 			{
-				wf4[index] = bitfield(index, 9) ? zeroval : wf0[index * 2];
-				wf5[index] = bitfield(index, 9) ? zeroval : wf0[(index * 2) & 0x1ff];
-				wf6[index] = bitfield(index, 9) << 15;
-				wf7[index] = (bitfield(index, 9) ? (index ^ 0x13ff) : index) << 3;
+				wf8[index] = 
+				wf9[index] = 
+				wfA[index] = 
+				wfB[index] = 
+				wfC[index] = 
+				wfD[index] = 
+				wfE[index] = 
+				wfF[index] = 
 			}
 		}
-	}
 
-	// OPL3/OPL4 have dynamic operators, so initialize the fourop_enable value here
+	// MADDY have dynamic operators, so initialize the fourop_enable value here
 	// since operator_map() is called right away, prior to reset()
-	if (Revision > 2)
+	if (ChipMode > 2)
 		m_regdata[0x104 % REGISTERS] = 0;
 }
 
@@ -134,8 +149,8 @@ opl_registers_base<Revision>::opl_registers_base() :
 //  reset - reset to initial state
 //-------------------------------------------------
 
-template<int Revision>
-void opl_registers_base<Revision>::reset()
+template<int ChipMode>
+void opl_registers_base<ChipMode>::reset()
 {
 	std::fill_n(&m_regdata[0], REGISTERS, 0);
 }
@@ -145,8 +160,8 @@ void opl_registers_base<Revision>::reset()
 //  save_restore - save or restore the data
 //-------------------------------------------------
 
-template<int Revision>
-void opl_registers_base<Revision>::save_restore(mss_saved_state &state)
+template<int ChipMode>
+void opl_registers_base<ChipMode>::save_restore(mss_saved_state &state)
 {
 	state.save_restore(m_lfo_am_counter);
 	state.save_restore(m_lfo_pm_counter);
@@ -161,51 +176,54 @@ void opl_registers_base<Revision>::save_restore(mss_saved_state &state)
 //  indices for each channel; for OPL this is fixed
 //-------------------------------------------------
 
-template<int Revision>
-void opl_registers_base<Revision>::operator_map(operator_mapping &dest) const
+template<int ChipMode>
+void opl_registers_base<ChipMode>::operator_map(operator_mapping &dest) const
 {
-	if (Revision <= 2)
-	{
-		// OPL/OPL2 has a fixed map, all 2 operators
-		static const operator_mapping s_fixed_map =
-		{ {
-			operator_list(  0,  3 ),  // Channel 0 operators
-			operator_list(  1,  4 ),  // Channel 1 operators
-			operator_list(  2,  5 ),  // Channel 2 operators
-			operator_list(  6,  9 ),  // Channel 3 operators
-			operator_list(  7, 10 ),  // Channel 4 operators
-			operator_list(  8, 11 ),  // Channel 5 operators
-			operator_list( 12, 15 ),  // Channel 6 operators
-			operator_list( 13, 16 ),  // Channel 7 operators
-			operator_list( 14, 17 ),  // Channel 8 operators
-		} };
-		dest = s_fixed_map;
-	}
-	else
-	{
-		// OPL3/OPL4 can be configured for 2 or 4 operators
-		uint32_t fourop = fourop_enable();
+	// MADDY can be configured for 2 or 4 operators
+	uint32_t fourop = fourop_enable();
 
-		dest.chan[ 0] = bitfield(fourop, 0) ? operator_list(  0,  3,  6,  9 ) : operator_list(  0,  3 );
-		dest.chan[ 1] = bitfield(fourop, 1) ? operator_list(  1,  4,  7, 10 ) : operator_list(  1,  4 );
-		dest.chan[ 2] = bitfield(fourop, 2) ? operator_list(  2,  5,  8, 11 ) : operator_list(  2,  5 );
-		dest.chan[ 3] = bitfield(fourop, 0) ? operator_list() : operator_list(  6,  9 );
-		dest.chan[ 4] = bitfield(fourop, 1) ? operator_list() : operator_list(  7, 10 );
-		dest.chan[ 5] = bitfield(fourop, 2) ? operator_list() : operator_list(  8, 11 );
-		dest.chan[ 6] = operator_list( 12, 15 );
-		dest.chan[ 7] = operator_list( 13, 16 );
-		dest.chan[ 8] = operator_list( 14, 17 );
-
-		dest.chan[ 9] = bitfield(fourop, 3) ? operator_list( 18, 21, 24, 27 ) : operator_list( 18, 21 );
-		dest.chan[10] = bitfield(fourop, 4) ? operator_list( 19, 22, 25, 28 ) : operator_list( 19, 22 );
-		dest.chan[11] = bitfield(fourop, 5) ? operator_list( 20, 23, 26, 29 ) : operator_list( 20, 23 );
-		dest.chan[12] = bitfield(fourop, 3) ? operator_list() : operator_list( 24, 27 );
-		dest.chan[13] = bitfield(fourop, 4) ? operator_list() : operator_list( 25, 28 );
-		dest.chan[14] = bitfield(fourop, 5) ? operator_list() : operator_list( 26, 29 );
-		dest.chan[15] = operator_list( 30, 33 );
-		dest.chan[16] = operator_list( 31, 34 );
-		dest.chan[17] = operator_list( 32, 35 );
-	}
+	dest.chan[ 0] = bitfield(fourop,  0) ? operator_list(  0,  1,  2,  3 ) : operator_list(  0,  1 );
+	dest.chan[ 1] = bitfield(fourop,  1) ? operator_list(  4,  5,  6,  7 ) : operator_list(  4,  5 );
+	dest.chan[ 2] = bitfield(fourop,  2) ? operator_list(  8,  9, 10, 11 ) : operator_list(  8,  9 );
+	dest.chan[ 3] = bitfield(fourop,  0) ? operator_list() : operator_list(  2,  3 );
+	dest.chan[ 4] = bitfield(fourop,  1) ? operator_list() : operator_list(  6,  7 );
+	dest.chan[ 5] = bitfield(fourop,  2) ? operator_list() : operator_list(  10, 11 );
+	
+	dest.chan[ 6] = bitfield(fourop,  3) ? operator_list( 12, 13, 14, 15 ) : operator_list( 12, 13 );
+	dest.chan[ 7] = bitfield(fourop,  4) ? operator_list( 16, 17, 18, 19 ) : operator_list( 16, 17 );
+	dest.chan[ 8] = bitfield(fourop,  5) ? operator_list( 20, 21, 22, 23 ) : operator_list( 20, 21 );
+	dest.chan[ 9] = bitfield(fourop,  3) ? operator_list() : operator_list( 14, 15 );
+	dest.chan[10] = bitfield(fourop,  4) ? operator_list() : operator_list( 18, 19 );
+	dest.chan[11] = bitfield(fourop,  5) ? operator_list() : operator_list( 22, 23 );
+	
+	dest.chan[12] = bitfield(fourop,  6) ? operator_list( 24, 25, 26, 27 ) : operator_list( 24, 25 );
+	dest.chan[13] = bitfield(fourop,  7) ? operator_list( 28, 29, 30, 31 ) : operator_list( 28, 29 );
+	dest.chan[14] = bitfield(fourop,  8) ? operator_list( 32, 33, 34, 35 ) : operator_list( 32, 33 );
+	dest.chan[15] = bitfield(fourop,  6) ? operator_list() : operator_list( 26, 27 );
+	dest.chan[16] = bitfield(fourop,  7) ? operator_list() : operator_list( 30, 34 );
+	dest.chan[17] = bitfield(fourop,  8) ? operator_list() : operator_list( 34, 35 );
+	
+	dest.chan[18] = bitfield(fourop,  9) ? operator_list( 36, 37, 38, 39 ) : operator_list( 36, 37 );
+	dest.chan[19] = bitfield(fourop, 10) ? operator_list( 40, 41, 42, 43 ) : operator_list( 40, 41 );
+	dest.chan[20] = bitfield(fourop, 11) ? operator_list( 44, 45, 46, 47 ) : operator_list( 44, 45 );
+	dest.chan[21] = bitfield(fourop,  9) ? operator_list() : operator_list( 38, 39 );
+	dest.chan[22] = bitfield(fourop, 10) ? operator_list() : operator_list( 42, 43 );
+	dest.chan[23] = bitfield(fourop, 11) ? operator_list() : operator_list( 46, 47 );
+	
+	dest.chan[24] = bitfield(fourop, 12) ? operator_list( 48, 49, 50, 51 ) : operator_list( 48, 49 );
+	dest.chan[25] = bitfield(fourop, 13) ? operator_list( 52, 53, 54, 55 ) : operator_list( 52, 53 );
+	dest.chan[26] = bitfield(fourop, 14) ? operator_list( 56, 57, 58, 59 ) : operator_list( 56, 57 );
+	dest.chan[27] = bitfield(fourop, 12) ? operator_list() : operator_list( 50, 51 );
+	dest.chan[28] = bitfield(fourop, 13) ? operator_list() : operator_list( 54, 55 );
+	dest.chan[29] = bitfield(fourop, 14) ? operator_list() : operator_list( 58, 59 );
+	
+	dest.chan[30] = bitfield(fourop, 15) ? operator_list( 60, 61, 62, 63 ) : operator_list( 60, 61 );
+	dest.chan[31] = bitfield(fourop, 16) ? operator_list( 64, 65, 66, 67 ) : operator_list( 64, 65 );
+	dest.chan[32] = bitfield(fourop, 17) ? operator_list( 68, 69, 70, 71 ) : operator_list( 68, 69 );
+	dest.chan[33] = bitfield(fourop, 15) ? operator_list() : operator_list( 62, 63 );
+	dest.chan[34] = bitfield(fourop, 16) ? operator_list() : operator_list( 66, 67 );
+	dest.chan[35] = bitfield(fourop, 17) ? operator_list() : operator_list( 70, 71 );
+	
 }
 
 
@@ -213,8 +231,8 @@ void opl_registers_base<Revision>::operator_map(operator_mapping &dest) const
 //  write - handle writes to the register array
 //-------------------------------------------------
 
-template<int Revision>
-bool opl_registers_base<Revision>::write(uint16_t index, uint8_t data, uint32_t &channel, uint32_t &opmask)
+template<int ChipMode>
+bool maddy_registers_base<ChipMode>::write(uint16_t index, uint8_t data, uint32_t &channel, uint32_t &opmask)
 {
 	assert(index < REGISTERS);
 
@@ -238,8 +256,8 @@ bool opl_registers_base<Revision>::write(uint16_t index, uint8_t data, uint32_t 
 		channel = index & 0x0f;
 		if (channel < 9)
 		{
-			if
-				channel += 9 * bitfield(index, 8);
+			if (bitfield(index, 8))
+				channel += 9;
 			opmask = bitfield(data, IsOpl != Is Maddy ? 6 : 5) ? 15 : 0;
 			return true;
 		}
@@ -254,14 +272,14 @@ bool opl_registers_base<Revision>::write(uint16_t index, uint8_t data, uint32_t 
 //  computations
 //-------------------------------------------------
 
-static int32_t opl_clock_noise_and_lfo(uint32_t &noise_lfsr, uint16_t &lfo_am_counter, uint16_t &lfo_pm_counter, uint8_t &lfo_am, uint32_t am_depth, uint32_t pm_depth)
+static int32_t maddy_clock_noise_and_lfo(uint32_t &noise_lfsr, uint16_t &lfo_am_counter, uint16_t &lfo_pm_counter, uint8_t &lfo_am, uint32_t am_depth, uint32_t pm_depth)
 {
-	// OPL has a 23-bit noise generator for the rhythm section, running at
+	// MADDY has a 23-bit noise generator for the rhythm section, running at
 	// a constant rate, used only for percussion input
 	noise_lfsr <<= 1;
 	noise_lfsr |= bitfield(noise_lfsr, 23) ^ bitfield(noise_lfsr, 9) ^ bitfield(noise_lfsr, 8) ^ bitfield(noise_lfsr, 1);
 
-	// OPL has two fixed-frequency LFOs, one for AM, one for PM
+	// MADDY has two fixed-frequency LFOs, one for AM, one for PM
 
 	// the AM LFO has 210*64 steps; at a nominal 50kHz output,
 	// this equates to a period of 50000/(210*64) = 3.72Hz
@@ -286,10 +304,10 @@ static int32_t opl_clock_noise_and_lfo(uint32_t &noise_lfsr, uint16_t &lfo_am_co
 	return pm_scale[bitfield(pm_counter, 10, 3)] >> (pm_depth ^ 1);
 }
 
-template<int Revision>
-int32_t opl_registers_base<Revision>::clock_noise_and_lfo()
+template<int ChipMode>
+int32_t maddy_registers_base<ChipMode>::clock_noise_and_lfo()
 {
-	return opl_clock_noise_and_lfo(m_noise_lfsr, m_lfo_am_counter, m_lfo_pm_counter, m_lfo_am, lfo_am_depth(), lfo_pm_depth());
+	return maddy_clock_noise_and_lfo(m_noise_lfsr, m_lfo_am_counter, m_lfo_pm_counter, m_lfo_am, lfo_am_depth(), lfo_pm_depth());
 }
 
 
@@ -300,8 +318,8 @@ int32_t opl_registers_base<Revision>::clock_noise_and_lfo()
 //  handle upper channels cleanly
 //-------------------------------------------------
 
-template<int Revision>
-void opl_registers_base<Revision>::cache_operator_data(uint32_t choffs, uint32_t opoffs, opdata_cache &cache)
+template<int ChipMode>
+void maddy_registers_base<ChipMode>::cache_operator_data(uint32_t choffs, uint32_t opoffs, opdata_cache &cache)
 {
 	// set up the easy stuff
 	cache.waveform = &m_waveform[op_waveform(opoffs) % WAVEFORMS][0];
@@ -323,7 +341,7 @@ void opl_registers_base<Revision>::cache_operator_data(uint32_t choffs, uint32_t
 	// actually reversed from what the manual says, however
 	keycode |= bitfield(block_freq, 9 - note_select(), 1);
 
-	// no detune adjustment on OPL
+	// no detune adjustment on MADDY
 	cache.detune = 0;
 
 	// multiple value, as an x.1 value (0 means 0.5)
@@ -367,9 +385,9 @@ void opl_registers_base<Revision>::cache_operator_data(uint32_t choffs, uint32_t
 //  compute_phase_step - compute the phase step
 //-------------------------------------------------
 
-static uint32_t opl_compute_phase_step(uint32_t block_freq, uint32_t multiple, int32_t lfo_raw_pm)
+static uint32_t maddy_compute_phase_step(uint32_t block_freq, uint32_t multiple, int32_t lfo_raw_pm)
 {
-	// OPL phase calculation has no detuning, but uses FNUMs like
+	// MADDY phase calculation has no detuning, but uses FNUMs like
 	// the OPN version, and computes PM a bit differently
 
 	// extract frequency number as a 12-bit fraction
@@ -390,10 +408,10 @@ static uint32_t opl_compute_phase_step(uint32_t block_freq, uint32_t multiple, i
 	return (phase_step * multiple) >> 1;
 }
 
-template<int Revision>
-uint32_t opl_registers_base<Revision>::compute_phase_step(uint32_t choffs, uint32_t opoffs, opdata_cache const &cache, int32_t lfo_raw_pm)
+template<int ChipMode>
+uint32_t maddy_registers_base<ChipMode>::compute_phase_step(uint32_t choffs, uint32_t opoffs, opdata_cache const &cache, int32_t lfo_raw_pm)
 {
-	return opl_compute_phase_step(cache.block_freq, cache.multiple, op_lfo_pm_enable(opoffs) ? lfo_raw_pm : 0);
+	return maddy_compute_phase_step(cache.block_freq, cache.multiple, op_lfo_pm_enable(opoffs) ? lfo_raw_pm : 0);
 }
 
 
@@ -401,278 +419,22 @@ uint32_t opl_registers_base<Revision>::compute_phase_step(uint32_t choffs, uint3
 //  log_keyon - log a key-on event
 //-------------------------------------------------
 
-template<int Revision>
-std::string opl_registers_base<Revision>::log_keyon(uint32_t choffs, uint32_t opoffs)
+template<int ChipMode>
+std::string maddy_registers_base<ChipMode>::log_keyon(uint32_t choffs, uint32_t opoffs)
 {
   return "";
 }
 
 
 //*********************************************************
-//  OPLL SPECIFICS
+//  MADDY
 //*********************************************************
 
 //-------------------------------------------------
-//  opll_registers - constructor
+//  maddyfm - constructor
 //-------------------------------------------------
 
-opll_registers::opll_registers() :
-	m_lfo_am_counter(0),
-	m_lfo_pm_counter(0),
-	m_noise_lfsr(1),
-	m_lfo_am(0)
-{
-	// create the waveforms
-	for (uint32_t index = 0; index < WAVEFORM_LENGTH; index++)
-		m_waveform[0][index] = abs_sin_attenuation(index) | (bitfield(index, 9) << 15);
-
-	uint16_t zeroval = m_waveform[0][0];
-	for (uint32_t index = 0; index < WAVEFORM_LENGTH; index++)
-		m_waveform[1][index] = bitfield(index, 9) ? zeroval : m_waveform[0][index];
-
-	// initialize the instruments to something sane
-	for (uint32_t choffs = 0; choffs < CHANNELS; choffs++)
-		m_chinst[choffs] = &m_regdata[0];
-	for (uint32_t opoffs = 0; opoffs < OPERATORS; opoffs++)
-		m_opinst[opoffs] = &m_regdata[bitfield(opoffs, 0)];
-}
-
-
-//-------------------------------------------------
-//  reset - reset to initial state
-//-------------------------------------------------
-
-void opll_registers::reset()
-{
-	std::fill_n(&m_regdata[0], REGISTERS, 0);
-}
-
-
-//-------------------------------------------------
-//  save_restore - save or restore the data
-//-------------------------------------------------
-
-void opll_registers::save_restore(mss_saved_state &state)
-{
-	state.save_restore(m_lfo_am_counter);
-	state.save_restore(m_lfo_pm_counter);
-	state.save_restore(m_lfo_am);
-	state.save_restore(m_noise_lfsr);
-	state.save_restore(m_regdata);
-}
-
-
-//-------------------------------------------------
-//  operator_map - return an array of operator
-//  indices for each channel; for OPLL this is fixed
-//-------------------------------------------------
-
-void opll_registers::operator_map(operator_mapping &dest) const
-{
-	static const operator_mapping s_fixed_map =
-	{ {
-		operator_list(  0,  1 ),  // Channel 0 operators
-		operator_list(  2,  3 ),  // Channel 1 operators
-		operator_list(  4,  5 ),  // Channel 2 operators
-		operator_list(  6,  7 ),  // Channel 3 operators
-		operator_list(  8,  9 ),  // Channel 4 operators
-		operator_list( 10, 11 ),  // Channel 5 operators
-		operator_list( 12, 13 ),  // Channel 6 operators
-		operator_list( 14, 15 ),  // Channel 7 operators
-		operator_list( 16, 17 ),  // Channel 8 operators
-	} };
-	dest = s_fixed_map;
-}
-
-
-//-------------------------------------------------
-//  write - handle writes to the register array;
-//  note that this code is also used by
-//  ymopl3_registers, so it must handle upper
-//  channels cleanly
-//-------------------------------------------------
-
-bool opll_registers::write(uint16_t index, uint8_t data, uint32_t &channel, uint32_t &opmask)
-{
-	// unclear the address is masked down to 6 bits or if writes above
-	// the register top are ignored; assuming the latter for now
-	if (index >= REGISTERS)
-		return false;
-
-	// write the new data
-	m_regdata[index] = data;
-
-	// handle writes to the rhythm keyons
-	if (index == 0x0e)
-	{
-		channel = RHYTHM_CHANNEL;
-		opmask = bitfield(data, 5) ? bitfield(data, 0, 5) : 0;
-		return true;
-	}
-
-	// handle writes to the channel keyons
-	if ((index & 0xf0) == 0x20)
-	{
-		channel = index & 0x0f;
-		if (channel < CHANNELS)
-		{
-			opmask = bitfield(data, 4) ? 3 : 0;
-			return true;
-		}
-	}
-	return false;
-}
-
-
-//-------------------------------------------------
-//  clock_noise_and_lfo - clock the noise and LFO,
-//  handling clock division, depth, and waveform
-//  computations
-//-------------------------------------------------
-
-int32_t opll_registers::clock_noise_and_lfo()
-{
-	// implementation is the same as OPL with fixed depths
-	return opl_clock_noise_and_lfo(m_noise_lfsr, m_lfo_am_counter, m_lfo_pm_counter, m_lfo_am, 1, 1);
-}
-
-
-//-------------------------------------------------
-//  cache_operator_data - fill the operator cache
-//  with prefetched data; note that this code is
-//  also used by ymopna_registers, so it must
-//  handle upper channels cleanly
-//-------------------------------------------------
-
-void opll_registers::cache_operator_data(uint32_t choffs, uint32_t opoffs, opdata_cache &cache)
-{
-	// first set up the instrument data
-	uint32_t instrument = ch_instrument(choffs);
-	if (rhythm_enable() && choffs >= 6)
-		m_chinst[choffs] = &m_instdata[8 * (15 + (choffs - 6))];
-	else
-		m_chinst[choffs] = (instrument == 0) ? &m_regdata[0] : &m_instdata[8 * (instrument - 1)];
-	m_opinst[opoffs] = m_chinst[choffs] + bitfield(opoffs, 0);
-
-	// set up the easy stuff
-	cache.waveform = &m_waveform[op_waveform(opoffs) % WAVEFORMS][0];
-
-	// get frequency from the channel
-	uint32_t block_freq = cache.block_freq = ch_block_freq(choffs);
-
-	// compute the keycode: block_freq is:
-	//
-	//     11  |
-	//     1098|76543210
-	//     BBBF|FFFFFFFF
-	//     ^^^^
-	//
-	// the 4-bit keycode uses the top 4 bits
-	uint32_t keycode = bitfield(block_freq, 8, 4);
-
-	// no detune adjustment on OPLL
-	cache.detune = 0;
-
-	// multiple value, as an x.1 value (0 means 0.5)
-	// replace the low bit with a table lookup to give 0,1,2,3,4,5,6,7,8,9,10,10,12,12,15,15
-	uint32_t multiple = op_multiple(opoffs);
-	cache.multiple = ((multiple & 0xe) | bitfield(0xc2aa, multiple)) * 2;
-	if (cache.multiple == 0)
-		cache.multiple = 1;
-
-	// phase step, or PHASE_STEP_DYNAMIC if PM is active; this depends on
-	// block_freq, detune, and multiple, so compute it after we've done those
-	if (op_lfo_pm_enable(opoffs) == 0)
-		cache.phase_step = compute_phase_step(choffs, opoffs, cache, 0);
-	else
-		cache.phase_step = opdata_cache::PHASE_STEP_DYNAMIC;
-
-	// total level, scaled by 8; for non-rhythm operator 0, this is the total
-	// level from the instrument data; for other operators it is 4*volume
-	if (bitfield(opoffs, 0) == 1 || (rhythm_enable() && choffs >= 7))
-		cache.total_level = op_volume(opoffs) * 4;
-	else
-		cache.total_level = ch_total_level(choffs);
-	cache.total_level <<= 3;
-
-	// pre-add key scale level
-	uint32_t ksl = op_ksl(opoffs);
-	if (ksl != 0)
-		cache.total_level += opl_key_scale_atten(bitfield(block_freq, 9, 3), bitfield(block_freq, 5, 4)) << ksl;
-
-	// 4-bit sustain level, but 15 means 31 so effectively 5 bits
-	cache.eg_sustain = op_sustain_level(opoffs);
-	cache.eg_sustain |= (cache.eg_sustain + 1) & 0x10;
-	cache.eg_sustain <<= 5;
-
-	// The envelope diagram in the YM2413 datasheet gives values for these
-	// in ms from 0->48dB. The attack/decay tables give values in ms from
-	// 0->96dB, so to pick an equivalent decay rate, we want to find the
-	// closest match that is 2x the 0->48dB value:
-	//
-	//     DP =   10ms (0->48db) ->   20ms (0->96db); decay of 12 gives   19.20ms
-	//     RR =  310ms (0->48db) ->  620ms (0->96db); decay of  7 gives  613.76ms
-	//     RS = 1200ms (0->48db) -> 2400ms (0->96db); decay of  5 gives 2455.04ms
-	//
-	// The envelope diagram for percussive sounds (eg_sustain() == 0) also uses
-	// "RR" to mean both the constant RR above and the Release Rate specified in
-	// the instrument data. In this case, Relief Pitcher's credit sound bears out
-	// that the Release Rate is used during sustain, and that the constant RR
-	// (or RS) is used during the release phase.
-	constexpr uint8_t DP = 12 * 4;
-	constexpr uint8_t RR = 7 * 4;
-	constexpr uint8_t RS = 5 * 4;
-
-	// determine KSR adjustment for envelope rates
-	uint32_t ksrval = keycode >> (2 * (op_ksr(opoffs) ^ 1));
-	cache.eg_rate[EG_DEPRESS] = DP;
-	cache.eg_rate[EG_ATTACK] = effective_rate(op_attack_rate(opoffs) * 4, ksrval);
-	cache.eg_rate[EG_DECAY] = effective_rate(op_decay_rate(opoffs) * 4, ksrval);
-	if (op_eg_sustain(opoffs))
-	{
-		cache.eg_rate[EG_SUSTAIN] = 0;
-		cache.eg_rate[EG_RELEASE] = ch_sustain(choffs) ? RS : effective_rate(op_release_rate(opoffs) * 4, ksrval);
-	}
-	else
-	{
-		cache.eg_rate[EG_SUSTAIN] = effective_rate(op_release_rate(opoffs) * 4, ksrval);
-		cache.eg_rate[EG_RELEASE] = ch_sustain(choffs) ? RS : RR;
-	}
-}
-
-
-//-------------------------------------------------
-//  compute_phase_step - compute the phase step
-//-------------------------------------------------
-
-uint32_t opll_registers::compute_phase_step(uint32_t choffs, uint32_t opoffs, opdata_cache const &cache, int32_t lfo_raw_pm)
-{
-	// phase step computation is the same as OPL but the block_freq has one
-	// more bit, which we shift in
-	return opl_compute_phase_step(cache.block_freq << 1, cache.multiple, op_lfo_pm_enable(opoffs) ? lfo_raw_pm : 0);
-}
-
-
-//-------------------------------------------------
-//  log_keyon - log a key-on event
-//-------------------------------------------------
-
-std::string opll_registers::log_keyon(uint32_t choffs, uint32_t opoffs)
-{
-	return "";
-}
-
-
-
-//*********************************************************
-//  YMF262
-//*********************************************************
-
-//-------------------------------------------------
-//  ymf262 - constructor
-//-------------------------------------------------
-
-ymf262::ymf262(mss_interface &intf) :
+maddyfm::maddyfm(mss_interface &intf) :
 	m_address(0),
 	m_fm(intf)
 {
@@ -683,7 +445,7 @@ ymf262::ymf262(mss_interface &intf) :
 //  reset - reset the system
 //-------------------------------------------------
 
-void ymf262::reset()
+void maddyfm::reset()
 {
 	// reset the engines
 	m_fm.reset();
@@ -694,7 +456,7 @@ void ymf262::reset()
 //  save_restore - save or restore the data
 //-------------------------------------------------
 
-void ymf262::save_restore(mss_saved_state &state)
+void maddyfm::save_restore(mss_saved_state &state)
 {
 	state.save_restore(m_address);
 	m_fm.save_restore(state);
@@ -705,7 +467,7 @@ void ymf262::save_restore(mss_saved_state &state)
 //  read_status - read the status register
 //-------------------------------------------------
 
-uint8_t ymf262::read_status()
+uint8_t maddyfm::read_status()
 {
 	return m_fm.status();
 }
@@ -715,7 +477,7 @@ uint8_t ymf262::read_status()
 //  read - handle a read from the device
 //-------------------------------------------------
 
-uint8_t ymf262::read(uint32_t offset)
+uint8_t maddyfm::read(uint32_t offset)
 {
 	uint8_t result = 0xff;
 	switch (offset & 3)
@@ -727,7 +489,7 @@ uint8_t ymf262::read(uint32_t offset)
 		case 1:
 		case 2:
 		case 3:
-			debug::log_unexpected_read_write("Unexpected read from YMF262 offset %d\n", offset & 3);
+			debug::log_unexpected_read_write("Unexpected read from MADDY offset %d\n", offset & 3);
 			break;
 	}
 	return result;
@@ -739,9 +501,9 @@ uint8_t ymf262::read(uint32_t offset)
 //  register
 //-------------------------------------------------
 
-void ymf262::write_address(uint8_t data)
+void maddyfm::write_address(uint8_t data)
 {
-	// YMF262 doesn't expose a busy signal, but it does indicate that
+	// MADDY doesn't expose a busy signal, but it does indicate that
 	// address writes should be no faster than every 32 clocks
 	m_fm.intf().mss_set_busy_end(32 * m_fm.clock_prescale());
 
@@ -755,9 +517,9 @@ void ymf262::write_address(uint8_t data)
 //  register
 //-------------------------------------------------
 
-void ymf262::write_data(uint8_t data)
+void maddyfm::write_data(uint8_t data)
 {
-	// YMF262 doesn't expose a busy signal, but it does indicate that
+	// MADDY doesn't expose a busy signal, but it does indicate that
 	// data writes should be no faster than every 32 clocks
 	m_fm.intf().mss_set_busy_end(32 * m_fm.clock_prescale());
 
@@ -771,9 +533,9 @@ void ymf262::write_data(uint8_t data)
 //  address register
 //-------------------------------------------------
 
-void ymf262::write_address_hi(uint8_t data)
+void maddyfm::write_address_hi(uint8_t data)
 {
-	// YMF262 doesn't expose a busy signal, but it does indicate that
+	// MADDY doesn't expose a busy signal, but it does indicate that
 	// address writes should be no faster than every 32 clocks
 	m_fm.intf().mss_set_busy_end(32 * m_fm.clock_prescale());
 
@@ -792,7 +554,7 @@ void ymf262::write_address_hi(uint8_t data)
 //  interface
 //-------------------------------------------------
 
-void ymf262::write(uint32_t offset, uint8_t data)
+void maddyfm::write(uint32_t offset, uint8_t data)
 {
 	switch (offset & 3)
 	{
@@ -819,17 +581,17 @@ void ymf262::write(uint32_t offset, uint8_t data)
 //  generate - generate samples of sound
 //-------------------------------------------------
 
-void ymf262::generate(output_data *output, uint32_t numsamples)
+void maddyfm::generate(output_data *output, uint32_t numsamples)
 {
 	for (uint32_t samp = 0; samp < numsamples; samp++, output++)
 	{
 		// clock the system
 		m_fm.clock(fm_engine::ALL_CHANNELS);
 
-		// update the FM content; mixing details for YMF262 need verification
+		// update the FM content; mixing details for MADDY need verification
 		m_fm.output(output->clear(), 0, 32767, fm_engine::ALL_CHANNELS);
 
-		// YMF262 output is 16-bit offset serial via YAC512 DAC
+		// MADDY output is 16-bit offset serial via YAC512 DAC
 		output->clamp16();
 	}
 }
@@ -838,7 +600,7 @@ void ymf262::generate(output_data *output, uint32_t numsamples)
 //  EXPLICIT INSTANTIATION
 //*********************************************************
 
-template class opl_registers_base<4>;
-template class fm_engine_base<opl_registers_base<4>>;
+template class maddy_registers_base<4>;
+template class fm_engine_base<maddy_registers_base<4>>;
 
 }
