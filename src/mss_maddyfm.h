@@ -100,9 +100,9 @@ namespace mss
 //              -x------ 4op Mix 16
 //              --x----- 4op Mix 17
 //              ---x---- 4op Mix 18
-//              -----x-- Extended OPN Channel 3
-//              ------x- Extended OPN Channel 9
-//              -------x Extended OPN Channel 15
+//              -----x-- Extended Channel 3
+//              ------x- Extended Channel 9
+//              -------x Extended Channel 15
 //          4EB x------- AM depth
 //              -x------ PM depth
 //              --x----- Rhythm enable
@@ -122,11 +122,11 @@ namespace mss
 //
 //     Per-channel registers:
 //        08-1A x------- LFO Enable
-//              -x------ Maddy Operator Amount (0=4op, 1=2op)
+//              -x------ Maddy Waveform Bank (0 = 1-64, 1 = 65-128)
 //              --xxx--- Operator 1 Feedback
-//              -----xxx Algorithm (4op extension) 
-//              -------x Algorithm (2op bit) 
-//        AC-D0 x------- Stereo Sign Flip (0=Left, 1=Right)
+//              -----xxx Algorithm (4op only) 
+//              -------x Algorithm (2op only) 
+//        AC-D0 x------- Stereo Sign Flip (0=Left/Positive, 1=Right/Negative)
 //              -xxxxxxx Signed Stereo Panning Value
 //      162-186 -----xxx FM Sensitivity
 //              ---xx--- AM Sensitivity
@@ -134,8 +134,8 @@ namespace mss
 //      187-1AB xxxxxxxx LFO Speed
 //      3EF-46B xxxxxxxx F-number (lower 8 bits)
 //      46C-4EA -x------ Key on
-//              --xxx--- Block (octave, 0-7)
-//              -----xxx F-number (higher 3 bits)
+//              --xxx--- Block (blocks span 0-7)
+//              -----xxx F-Number (higher 3 bits)
 //              x------- Auxiliary Output (see register sheet)
 //
 //     Per-operator registers:
@@ -159,25 +159,21 @@ namespace mss
 template<int ChipMode>
 class maddy_registers_base : public fm_registers_base
 {
-	static constexpr bool IsOpl = (ChipMode <= 1);
-	static constexpr bool IsOpn = (ChipMode == 2);
-	static constexpr bool IsOpm = (ChipMode == 3);
-	static constexpr bool IsMaddy = (ChipMode >= 4);
-
 public:
 	// constants
-	static constexpr uint32_t OUTPUTS = IsMaddy ? 2 : 1;
-	static constexpr uint32_t CHANNELS = IsMaddy ? 36 : 18 : (IsOpl ? 36 : 18 : (IsOpn ? 18 : 12 : 6 : (IsOpm ? 16 : 8 : 1)));
+	static constexpr uint32_t OUTPUTS = 2 : 1;
+	static constexpr uint32_t CHANNELS = 36 : 18;
 	static constexpr uint32_t ALL_CHANNELS = (1 << CHANNELS) - 1;
-	static constexpr uint32_t OPERATORS = IsMaddy != IsOpl ? CHANNELS * 2 : (IsOpm != IsOpn ? CHANNELS * 4);
-	static constexpr uint32_t WAVEFORMS = IsMaddy ? 16 : (IsOpl ? 8 : 1);
-	static constexpr uint32_t REGISTERS = IsMaddy ? 0x511 : 0x000;
+	static constexpr uint32_t OPERATORS = CHANNELS * 2;
+	static constexpr uint32_t WAVEFORMS = IsMaddy ? 16 : 1;
+	static constexpr uint32_t REGISTERS = 0x511 : 0x000;
 	static constexpr uint32_t REG_MODE = 0x04;
 	static constexpr uint32_t EG_CLOCK_DIVIDER = 1;
-	static constexpr uint8_t STATUS_TIMERA = 0x40;
-	static constexpr uint8_t STATUS_TIMERB = 0x20;
+	static constexpr bool EG_HAS_SSG = true;
+	static constexpr uint8_t STATUS_TIMERA = 0x01;
+	static constexpr uint8_t STATUS_TIMERB = 0x02;
 	static constexpr uint8_t STATUS_BUSY = 0;
-	static constexpr uint8_t STATUS_IRQ = 0x80;
+	static constexpr uint8_t STATUS_IRQ = 0x00;
 
 	// constructor
 	maddy_registers_base();
@@ -241,7 +237,6 @@ public:
 	uint32_t enable_timer_a() const                  { return 1; }
 	uint32_t load_timer_b() const                    { return byte(0x00, 2, 1); }
 	uint32_t load_timer_a() const                    { return byte(0x00, 3, 1); }
-	uint32_t note_select() const                     { return byte(0x08, 6, 1); }
 	uint32_t lfo_am_depth1() const                   { return byte(0x4eb, 0, 1); }
 	uint32_t lfo_pm_depth1() const                   { return byte(0x4eb, 1, 1); }
 	uint32_t lfo_am_depth2() const                   { return byte(0x4ec, 0, 1); }
@@ -250,27 +245,30 @@ public:
 	uint32_t rhythm_enable2() const                  { return byte(0x4ec, 2, 1); }
 	uint32_t rhythm_keyon1() const                   { return byte(0x4eb, 3, 5); }
 	uint32_t rhythm_keyon2() const                   { return byte(0x4ec, 3, 5); }
-	uint32_t fourop_enable() const                   { return IsOpl != IsMaddy ? (m_regdata[0x04]&63)|(m_regdata[0x05]<<6)|((m_regdata[0x06]&15)<<14) : 0; }
 
 	// per-channel registers
-	uint32_t ch_block_freq(uint32_t choffs) const    { return word(0x4ea, 0, 5, 0x3ef, 0, 8, choffs); }
-	uint32_t ch_feedback(uint32_t choffs) const      { return byte(0xc0, 1, 3, choffs); }
-	uint32_t ch_algorithm(uint32_t choffs) const     { return byte(0xc0, 0, 1, choffs) | (IsOpn != IsOpm != IsMaddy ? (8 | (byte(0xc3, 0, 1, choffs) << 1)) : 0); }
+	uint32_t ch_block_freq(uint32_t choffs) const    { return word(0x4ea, 3, 3, 0x3ef, 0, 8, choffs); }
+	uint32_t ch_feedback(uint32_t choffs) const      { return byte(0x08, 3, 3, choffs); }
+	uint32_t ch_algorithm(uint32_t choffs) const     { return byte(0x08, 0, 1, choffs) | (8 | (byte(0xc3, 0, 3, choffs) << 1)) : 0; }
 	uint32_t ch_output_toggle(uint32_t choffs) const { return newflag() ? byte(0x4ea + choffs, 7, 1) : 1; }
+	uint32_t ch_fourop_enable(uint32_t choffs) const { return byte(0x08, 6, 1, choffs); }
 
 	// per-operator registers
-	uint32_t op_lfo_am_enable(uint32_t opoffs) const { return byte(0x20, 7, 1, opoffs); }
-	uint32_t op_lfo_pm_enable(uint32_t opoffs) const { return byte(0x20, 6, 1, opoffs); }
-	uint32_t op_eg_sustain(uint32_t opoffs) const    { return byte(0x20, 5, 1, opoffs); }
-	uint32_t op_ksr(uint32_t opoffs) const           { return byte(0x20, 4, 1, opoffs); }
-	uint32_t op_multiple(uint32_t opoffs) const      { return byte(0x20, 0, 4, opoffs); }
-	uint32_t op_ksl(uint32_t opoffs) const           { uint32_t temp = byte(0x40, 6, 2, opoffs); return bitfield(temp, 1) | (bitfield(temp, 0) << 1); }
-	uint32_t op_total_level(uint32_t opoffs) const   { return byte(0x40, 0, 6, opoffs); }
-	uint32_t op_attack_rate(uint32_t opoffs) const   { return byte(0x60, 4, 4, opoffs); }
-	uint32_t op_decay_rate(uint32_t opoffs) const    { return byte(0x60, 0, 4, opoffs); }
-	uint32_t op_sustain_level(uint32_t opoffs) const { return byte(0x80, 4, 4, opoffs); }
-	uint32_t op_release_rate(uint32_t opoffs) const  { return byte(0x80, 0, 4, opoffs); }
-	uint32_t op_waveform(uint32_t opoffs) const      { return IsOpl ? byte(0xe0, 0, newflag() ? 3 : 2, opoffs) : 0; }
+	uint32_t op_lfo_am_enable(uint32_t opoffs) const { return byte(0x1b, 7, 1, opoffs); }
+	uint32_t op_detune(uint32_t opoffs) const        { return byte(0x23c, 4, 3, opoffs); }
+	uint32_t op_ksr(uint32_t opoffs) const           { return byte(0x1ac, 4, 1, opoffs); }
+	uint32_t op_multiple(uint32_t opoffs) const      { return byte(0xd1, 0, 4, opoffs); }
+	uint32_t op_total_level(uint32_t opoffs) const   { return byte(0x1b, 0, 7, opoffs); }
+	uint32_t op_attack_rate(uint32_t opoffs) const   { return byte(0x1ac, 0, 5, opoffs); }
+	uint32_t op_decay_rate(uint32_t opoffs) const    { return byte(0x23c, 0, 5, opoffs); }
+	uint32_t op_sustain_level(uint32_t opoffs) const { return byte(0x35e, 4, 4, opoffs); }
+	uint32_t op_sustain_rate(uint32_t opoffs) const  { return byte(0x2cd, 0, 5, opoffs); }
+	uint32_t op_release_rate(uint32_t opoffs) const  { return byte(0x35e, 0, 4, opoffs); }
+	uint32_t op_waveform(uint32_t opoffs) const      { return byte(0xd1, 4, 4, opoffs); }
+	uint32_t op_ssg_eg_enable(uint32_t opoffs) const { return byte(0x1ac, 5, 1, opoffs); }
+	uint32_t op_ssg_eg_mode(uint32_t opoffs) const   { return byte(0x2cd, 5, 3, opoffs); }
+	uint32_t op_detune2(uint32_t opoffs) const       { return byte(0x4ed, 0, 2, opoffs); }
+	uint32_t op_wave_address(uint32_t opoffs) const  { return byte(0x4ed, 2, 6, opoffs); }
 
 protected:
 	// return a bitfield extracted from a byte
@@ -295,8 +293,12 @@ protected:
 	uint16_t m_lfo_am_counter;            // LFO AM counter
 	uint16_t m_lfo_pm_counter;            // LFO PM counter
 	uint32_t m_noise_lfsr;                // noise LFSR state
+	uint8_t m_noise_counter;              // noise counter
+	uint8_t m_noise_state;                // latched noise state
+	uint8_t m_noise_lfo;                  // latched LFO noise value
 	uint8_t m_lfo_am;                     // current LFO AM value
 	uint8_t m_regdata[REGISTERS];         // register data
+	int16_t m_lfo_waveform[4][LFO_WAVEFORM_LENGTH]; // LFO waveforms; AM in low 8, PM in upper 8
 	uint16_t m_waveform[WAVEFORMS][WAVEFORM_LENGTH]; // waveforms
 };
 
@@ -307,7 +309,7 @@ using opl_registers = maddy_registers_base<3>;
 
 
 //*********************************************************
-//  OPL IMPLEMENTATION CLASSES
+//  MADDY IMPLEMENTATION CLASSES
 //*********************************************************
 
 class maddyfm

@@ -85,9 +85,11 @@ inline uint32_t opl_key_scale_atten(uint32_t block, uint32_t fnum_4msb)
 
 template<int Revision>
 opl_registers_base<Revision>::opl_registers_base() :
-	m_lfo_am_counter(0),
-	m_lfo_pm_counter(0),
+	m_lfo_counter(0),
 	m_noise_lfsr(1),
+	m_noise_counter(0),
+	m_noise_state(0),
+	m_noise_lfo(0),
 	m_lfo_am(0)
 {
 	// create these pointers to appease overzealous compilers checking array
@@ -138,6 +140,29 @@ opl_registers_base<Revision>::opl_registers_base() :
 			}
 		}
 
+		// create the LFO waveforms; AM in the low 8 bits, PM in the upper 8
+		// waveforms are adjusted to match the pictures in the application manual
+		for (uint32_t index = 0; index < LFO_WAVEFORM_LENGTH; index++)
+		{
+			// waveform 0 is a sawtooth
+			uint8_t am = index ^ 0xff;
+			int8_t pm = int8_t(index);
+			m_lfo_waveform[0][index] = am | (pm << 8);
+
+			// waveform 1 is a square wave
+			am = bitfield(index, 7) ? 0 : 0xff;
+			pm = int8_t(am ^ 0x80);
+			m_lfo_waveform[1][index] = am | (pm << 8);
+
+			// waveform 2 is a triangle wave
+			am = bitfield(index, 7) ? (index << 1) : ((index ^ 0xff) << 1);
+			pm = int8_t(bitfield(index, 6) ? am : ~am);
+			m_lfo_waveform[2][index] = am | (pm << 8);
+
+			// waveform 3 is noise; it is filled in dynamically
+			m_lfo_waveform[3][index] = 0;
+		}
+
 	// MADDY have dynamic operators, so initialize the fourop_enable value here
 	// since operator_map() is called right away, prior to reset()
 	if (ChipMode > 2)
@@ -153,6 +178,8 @@ template<int ChipMode>
 void opl_registers_base<ChipMode>::reset()
 {
 	std::fill_n(&m_regdata[0], REGISTERS, 0);
+
+	m_lfo_counter = 0;
 }
 
 
@@ -167,6 +194,9 @@ void opl_registers_base<ChipMode>::save_restore(mss_saved_state &state)
 	state.save_restore(m_lfo_pm_counter);
 	state.save_restore(m_lfo_am);
 	state.save_restore(m_noise_lfsr);
+	state.save_restore(m_noise_counter);
+	state.save_restore(m_noise_state);
+	state.save_restore(m_noise_lfo);
 	state.save_restore(m_regdata);
 }
 
@@ -251,14 +281,14 @@ bool maddy_registers_base<ChipMode>::write(uint16_t index, uint8_t data, uint32_
 	}
 
 	// handle writes to the channel keyons
-	if ((index & 0xf0) == 0xb0)
+	if ((index & 0xf0) == 0x46c)
 	{
 		channel = index & 0x0f;
 		if (channel < 9)
 		{
 			if (bitfield(index, 8))
 				channel += 9;
-			opmask = bitfield(data, IsOpl != Is Maddy ? 6 : 5) ? 15 : 0;
+			opmask = bitfield(data, IsMaddy ? 6 : 5) ? 15 : 0;
 			return true;
 		}
 	}
@@ -272,42 +302,63 @@ bool maddy_registers_base<ChipMode>::write(uint16_t index, uint8_t data, uint32_
 //  computations
 //-------------------------------------------------
 
-static int32_t maddy_clock_noise_and_lfo(uint32_t &noise_lfsr, uint16_t &lfo_am_counter, uint16_t &lfo_pm_counter, uint8_t &lfo_am, uint32_t am_depth, uint32_t pm_depth)
+int32_t opm_registers::clock_noise_and_lfo()
 {
-	// MADDY has a 23-bit noise generator for the rhythm section, running at
-	// a constant rate, used only for percussion input
-	noise_lfsr <<= 1;
-	noise_lfsr |= bitfield(noise_lfsr, 23) ^ bitfield(noise_lfsr, 9) ^ bitfield(noise_lfsr, 8) ^ bitfield(noise_lfsr, 1);
+	// base noise frequency is measured at 2x 1/2 FM frequency; this
+	// means each tick counts as two steps against the noise counter
+	uint32_t freq = noise_frequency() ^ 0x1f;
+	for (int rep = 0; rep < 2; rep++)
+	{
+		// evidence seems to suggest the LFSR is clocked continually and just
+		// sampled at the noise frequency for output purposes; note that the
+		// low 8 bits are the most recent 8 bits of history while bits 8-24
+		// contain the 17 bit LFSR state
+		m_noise_lfsr <<= 1;
+		m_noise_lfsr |= bitfield(m_noise_lfsr, 17) ^ bitfield(m_noise_lfsr, 14) ^ 1;
 
-	// MADDY has two fixed-frequency LFOs, one for AM, one for PM
+		// compare against the frequency and latch when we exceed it
+		if (m_noise_counter++ >= freq)
+		{
+			m_noise_counter = 0;
+			m_noise_state = bitfield(m_noise_lfsr, 17);
+		}
+	}
 
-	// the AM LFO has 210*64 steps; at a nominal 50kHz output,
-	// this equates to a period of 50000/(210*64) = 3.72Hz
-	uint32_t am_counter = lfo_am_counter++;
-	if (am_counter >= 210*64 - 1)
-		lfo_am_counter = 0;
+	// treat the rate as a 4.4 floating-point step value with implied
+	// leading 1; this matches exactly the frequencies in the application
+	// manual, though it might not be implemented exactly this way on chip
+  // note from tildearrow:
+  // - in fact it doesn't. the strings in Scherzo Di Notte totally go out
+  //   tune after a bit (and this doesn't happen in Nuked-OPM).
+	uint32_t rate = lfo_rate();
+  if (rate != 0) {
+	  m_lfo_counter += (0x10 | bitfield(rate, 0, 4)) << bitfield(rate, 4, 4);
+  }
 
-	// low 8 bits are fractional; depth 0 is divided by 2, while depth 1 is times 2
-	int shift = 9 - 2 * am_depth;
+	// bit 1 of the test register is officially undocumented but has been
+	// discovered to hold the LFO in reset while active
+	if (lfo_reset())
+		m_lfo_counter = 0;
 
-	// AM value is the upper bits of the value, inverted across the midpoint
-	// to produce a triangle
-	lfo_am = ((am_counter < 105*64) ? am_counter : (210*64+63 - am_counter)) >> shift;
+	// now pull out the non-fractional LFO value
+	uint32_t lfo = bitfield(m_lfo_counter, 22, 8);
 
-	// the PM LFO has 8192 steps, or a nominal period of 6.1Hz
-	uint32_t pm_counter = lfo_pm_counter++;
+	// fill in the noise entry 1 ahead of our current position; this
+	// ensures the current value remains stable for a full LFO clock
+	// and effectively latches the running value when the LFO advances
+	uint32_t lfo_noise = bitfield(m_noise_lfsr, 17, 8);
+	m_lfo_waveform[3][(lfo + 1) & 0xff] = lfo_noise | (lfo_noise << 8);
 
-	// PM LFO is broken into 8 chunks, each lasting 1024 steps; the PM value
-	// depends on the upper bits of FNUM, so this value is a fraction and
-	// sign to apply to that value, as a 1.3 value
-	static int8_t const pm_scale[8] = { 8, 4, 0, -4, -8, -4, 0, 4 };
-	return pm_scale[bitfield(pm_counter, 10, 3)] >> (pm_depth ^ 1);
-}
+	// fetch the AM/PM values based on the waveform; AM is unsigned and
+	// encoded in the low 8 bits, while PM signed and encoded in the upper
+	// 8 bits
+	int32_t ampm = m_lfo_waveform[lfo_waveform()][lfo];
 
-template<int ChipMode>
-int32_t maddy_registers_base<ChipMode>::clock_noise_and_lfo()
-{
-	return maddy_clock_noise_and_lfo(m_noise_lfsr, m_lfo_am_counter, m_lfo_pm_counter, m_lfo_am, lfo_am_depth(), lfo_pm_depth());
+	// apply depth to the AM value and store for later
+	m_lfo_am = ((ampm & 0xff) * lfo_am_depth()) >> 7;
+
+	// apply depth to the PM value and return it
+	return ((ampm >> 8) * int32_t(lfo_pm_depth())) >> 7;
 }
 
 
@@ -387,11 +438,11 @@ void maddy_registers_base<ChipMode>::cache_operator_data(uint32_t choffs, uint32
 
 static uint32_t maddy_compute_phase_step(uint32_t block_freq, uint32_t multiple, int32_t lfo_raw_pm)
 {
-	// MADDY phase calculation has no detuning, but uses FNUMs like
-	// the OPN version, and computes PM a bit differently
+	// MADDY phase calculation has only a single detune parameter
+	// and uses FNUMs instead of keycodes
 
 	// extract frequency number as a 12-bit fraction
-	uint32_t fnum = bitfield(block_freq, 0, 10) << 2;
+	uint32_t fnum = bitfield(block_freq, 0, 11) << 1;
 
 	// apply the phase adjustment based on the upper 3 bits
 	// of FNUM and the PM depth parameters
@@ -403,6 +454,13 @@ static uint32_t maddy_compute_phase_step(uint32_t block_freq, uint32_t multiple,
 	// apply block shift to compute phase step
 	uint32_t block = bitfield(block_freq, 10, 3);
 	uint32_t phase_step = (fnum << block) >> 2;
+
+	// apply detune based on the keycode
+	phase_step += cache.detune;
+
+	// clamp to 17 bits in case detune overflows
+	// QUESTION: is this specific to the YM2612/3438?
+	phase_step &= 0x1ffff;
 
 	// apply frequency multiplier (which is cached as an x.1 value)
 	return (phase_step * multiple) >> 1;
@@ -501,7 +559,7 @@ uint8_t maddyfm::read(uint32_t offset)
 //  register
 //-------------------------------------------------
 
-void maddyfm::write_address(uint8_t data)
+void maddyfm::write_address(uint16_t data)
 {
 	// MADDY doesn't expose a busy signal, but it does indicate that
 	// address writes should be no faster than every 32 clocks
@@ -529,27 +587,6 @@ void maddyfm::write_data(uint8_t data)
 
 
 //-------------------------------------------------
-//  write_address_hi - handle a write to the upper
-//  address register
-//-------------------------------------------------
-
-void maddyfm::write_address_hi(uint8_t data)
-{
-	// MADDY doesn't expose a busy signal, but it does indicate that
-	// address writes should be no faster than every 32 clocks
-	m_fm.intf().mss_set_busy_end(32 * m_fm.clock_prescale());
-
-	// just set the address
-	m_address = data | 0x100;
-
-	// tests reveal that in compatibility mode, upper bit is masked
-	// except for register 0x105
-	if (m_fm.regs().newflag() == 0 && m_address != 0x105)
-		m_address &= 0xff;
-}
-
-
-//-------------------------------------------------
 //  write - handle a write to the register
 //  interface
 //-------------------------------------------------
@@ -567,7 +604,7 @@ void maddyfm::write(uint32_t offset, uint8_t data)
 			break;
 
 		case 2: // address port
-			write_address_hi(data);
+			write_address(data);
 			break;
 
 		case 3: // data port
