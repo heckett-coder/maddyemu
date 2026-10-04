@@ -28,16 +28,13 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.*/
 
-
-
 /*DISCLAIMER: THIS IS AN EDITED VERSION OF YMFM MADE BY Heckett Heriot!
 This particular edit is called MADDY-Emu and is meant for a fantasy chip!
 This source code and all binaries produced with it officially should be
 FREE (as in both liberated and of no monetary gain)! Whichever products
-use this code as a firmware should provide a link to their branch's repo
-on Github and also make it public for all to see and use! This is a 
-requirement for any modification! THE PAID PRODUCT IN QUESTION MUST NOT
-INCLUDE THE FIRMWARE, IT SHOULD INSTEAD come with INSTRUCTIONS ON HOW TO
+use this code as a firmware should provide a link to the master branch/
+your custom branch's repo on Github! THE PAID PRODUCT IN QUESTION MUST
+NOT INCLUDE THE FIRMWARE, IT SHOULD INSTEAD GIVE INSTRUCTIONS ON HOW TO
 SET IT UP IF POSSIBLE!
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
