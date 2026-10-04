@@ -266,7 +266,7 @@ bool maddy_registers_base<ChipMode>::write(uint16_t index, uint8_t data, uint32_
 
 	// writes to the mode register with high bit set ignore the low bits
 	if (index == REG_MODE && bitfield(data, 7) != 0)
-		m_regdata[index] |= 0x80;
+		m_regdata[index] |= 0x3ef;
 	else
 		m_regdata[index] = data;
 
@@ -302,26 +302,6 @@ bool maddy_registers_base<ChipMode>::write(uint16_t index, uint8_t data, uint32_
 
 int32_t opm_registers::clock_noise_and_lfo()
 {
-	// base noise frequency is measured at 2x 1/2 FM frequency; this
-	// means each tick counts as two steps against the noise counter
-	uint32_t freq = noise_frequency() ^ 0x1f;
-	for (int rep = 0; rep < 2; rep++)
-	{
-		// evidence seems to suggest the LFSR is clocked continually and just
-		// sampled at the noise frequency for output purposes; note that the
-		// low 8 bits are the most recent 8 bits of history while bits 8-24
-		// contain the 17 bit LFSR state
-		m_noise_lfsr <<= 1;
-		m_noise_lfsr |= bitfield(m_noise_lfsr, 17) ^ bitfield(m_noise_lfsr, 14) ^ 1;
-
-		// compare against the frequency and latch when we exceed it
-		if (m_noise_counter++ >= freq)
-		{
-			m_noise_counter = 0;
-			m_noise_state = bitfield(m_noise_lfsr, 17);
-		}
-	}
-
 	// treat the rate as a 4.4 floating-point step value with implied
 	// leading 1; this matches exactly the frequencies in the application
 	// manual, though it might not be implemented exactly this way on chip
@@ -390,8 +370,8 @@ void maddy_registers_base<ChipMode>::cache_operator_data(uint32_t choffs, uint32
 	// actually reversed from what the manual says, however
 	keycode |= bitfield(block_freq, 9 - note_select(), 1);
 
-	// no detune adjustment on MADDY
-	cache.detune = 0;
+	// detune adjustment
+	cache.detune = detune_adjustment(op_detune(opoffs), keycode);
 
 	// multiple value, as an x.1 value (0 means 0.5)
 	// replace the low bit with a table lookup to give 0,1,2,3,4,5,6,7,8,9,10,10,12,12,15,15
@@ -400,9 +380,9 @@ void maddy_registers_base<ChipMode>::cache_operator_data(uint32_t choffs, uint32
 	if (cache.multiple == 0)
 		cache.multiple = 1;
 
-	// phase step, or PHASE_STEP_DYNAMIC if PM is active; this depends on block_freq, detune,
-	// and multiple, so compute it after we've done those
-	if (op_lfo_pm_enable(opoffs) == 0)
+	// phase step, or PHASE_STEP_DYNAMIC if PM is active; this depends on
+	// block_freq, detune, and multiple, so compute it after we've done those
+	if (lfo_pm_depth() == 0 || ch_lfo_pm_sens(choffs) == 0)
 		cache.phase_step = compute_phase_step(choffs, opoffs, cache, 0);
 	else
 		cache.phase_step = opdata_cache::PHASE_STEP_DYNAMIC;
@@ -422,11 +402,10 @@ void maddy_registers_base<ChipMode>::cache_operator_data(uint32_t choffs, uint32
 
 	// determine KSR adjustment for enevlope rates
 	uint32_t ksrval = keycode >> (2 * (op_ksr(opoffs) ^ 1));
-	cache.eg_rate[EG_ATTACK] = effective_rate(op_attack_rate(opoffs) * 4, ksrval);
-	cache.eg_rate[EG_DECAY] = effective_rate(op_decay_rate(opoffs) * 4, ksrval);
-	cache.eg_rate[EG_SUSTAIN] = op_eg_sustain(opoffs) ? 0 : effective_rate(op_release_rate(opoffs) * 4, ksrval);
-	cache.eg_rate[EG_RELEASE] = effective_rate(op_release_rate(opoffs) * 4, ksrval);
-	cache.eg_rate[EG_DEPRESS] = 0x3f;
+	cache.eg_rate[EG_ATTACK] = effective_rate(op_attack_rate(opoffs) * 2, ksrval);
+	cache.eg_rate[EG_DECAY] = effective_rate(op_decay_rate(opoffs) * 2, ksrval);
+	cache.eg_rate[EG_SUSTAIN] = effective_rate(op_sustain_rate(opoffs) * 2, ksrval);
+	cache.eg_rate[EG_RELEASE] = effective_rate(op_release_rate(opoffs) * 4 + 2, ksrval);
 }
 
 
