@@ -271,7 +271,7 @@ bool maddy_registers_base<ChipMode>::write(uint16_t index, uint8_t data, uint32_
 		m_regdata[index] = data;
 
 	// handle writes to the rhythm keyons
-	if (index == 0xbd)
+	if (index == 0x4eb)
 	{
 		channel = RHYTHM_CHANNEL;
 		opmask = bitfield(data, 5) ? bitfield(data, 0, 5) : 0;
